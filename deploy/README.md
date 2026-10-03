@@ -906,6 +906,8 @@ PostgreSQL 库 gpu_metrics(表 gpu_samples,保留 7 天,每小时清理一次)
 | 数据库 | 复用控制面自带 PostgreSQL,但使用独立库 `gpu_metrics` 与独立角色,不动 Coder 自己的库表;口令写在 `/etc/gpu-metrics.env`(0600),由 `deploy/local.env` 的 `METRICS_PG_URL` 渲染 |
 | 接口 | `GET /gpu-api/gpus?workspace_id=<id>` 列出该工作区的卡;`GET /gpu-api/series?workspace_id=<id>&gpu=<uuid>&hours=<n>` 取序列(自动降采样到 600 点以内);`GET /gpu-api/healthz` 查看最近一次采样时间 |
 | 可见性 | 指标对所有登录用户可见;工作区内的 VS Code、Terminal 等入口仍按 Coder 自身的权限模型控制,不受此影响 |
+| 降采样 | 历史接口在**服务端**按需聚合:`GET /gpu-api/series` 先数出窗口内的原始点数,再按 `bucket = ceil(点数/600)` 分钟分组求平均,因此最多返回 600 个点。实测(造 7 天每分钟一条共 10,080 行):1 小时 59 点、24 小时聚合成 3 分钟粒度 480 点、7 天聚合成 17 分钟粒度 594 点,响应约 62 KB。聚合粒度会随响应返回(`bucket_minutes`),页面在聚合时提示「已按 N 分钟聚合」 |
+| 验证工具 | `deploy/gpu-metrics/seedtool.go`(`go:build ignore`,不参与服务构建)可造/查/清测试数据:`go run seedtool.go "<METRICS_PG_URL>" seed|count|clean` |
 | 重建与重启 | `cd deploy/gpu-metrics && go build -o /usr/local/bin/gpu-metrics .` 后 `systemctl restart gpu-metrics`;`sudo deploy/install.sh` 会在能找到 Go 工具链时自动重建 |
 
 首次部署时需要先建库与角色(口令自己生成,只写进 `deploy/local.env`):
@@ -937,7 +939,7 @@ curl -s http://workspace.mingjia.tech/gpu-api/healthz
 
 | 列 | 来源 |
 | --- | --- |
-| 实例 / 属主 | Pod 标签 `com.coder.workspace.name` 与 `com.coder.user.username`:实例名为主行,属主为副行 |
+| 用户 / 实例 | Pod 标签 `com.coder.user.username` 与 `com.coder.workspace.name`,显示为「用户 / 实例」 |
 | 状态 | Pod `status.phase`(只列 Running) |
 | 配置(CPU/内存/GPU/磁盘) | 容器 `dev` 的 limits + 挂到 `/home/coder` 的 PVC 申请容量 |
 | 当前用量(CPU/内存/磁盘) | kubelet Summary API(`/api/v1/nodes/<node>/proxy/stats/summary`,经 k8s API 代理,不需要 metrics-server);磁盘只统计 home 卷 |

@@ -40,27 +40,6 @@ const formatUptime = (seconds: number): string => {
 
 const formatGiB = (value: number): string => `${value.toFixed(1)} GiB`;
 
-const GpuSummary: React.FC<{ instance: DashboardInstance }> = ({
-	instance,
-}) => {
-	if (instance.gpu_count === 0) {
-		return <span className="text-content-secondary">未申请</span>;
-	}
-	if (instance.gpus.length === 0) {
-		return <span className="text-content-secondary">等待采样</span>;
-	}
-	return (
-		<span>
-			{instance.gpus
-				.map(
-					(g) =>
-						`#${g.index + 1} ${g.util_pct.toFixed(0)}% / ${g.mem_used_mib.toFixed(0)} MiB`,
-				)
-				.join(" · ")}
-		</span>
-	);
-};
-
 /**
  * 正在运行的实例看板,所有登录用户可见。这里只展示信息:没有启动/停止/删除等操作,
  * 也不提供 VS Code、终端等实例入口(那些仍然只有工作区属主能使用)。
@@ -100,11 +79,10 @@ const DashboardPage: React.FC = () => {
 						<Table aria-label="正在运行的实例">
 							<TableHeader>
 								<TableRow>
-									<TableHead className="pl-5">实例 / 属主</TableHead>
+									<TableHead className="pl-5">用户 / 实例</TableHead>
 									<TableHead>状态</TableHead>
 									<TableHead>配置</TableHead>
 									<TableHead>当前用量</TableHead>
-									<TableHead>GPU</TableHead>
 									<TableHead>运行时间</TableHead>
 									<TableHead className="pr-5 text-right">GPU 历史</TableHead>
 								</TableRow>
@@ -113,14 +91,13 @@ const DashboardPage: React.FC = () => {
 								{(instancesQuery.data ?? []).map((instance) => (
 									<TableRow key={instance.workspace_id}>
 										<TableCell className="pl-5">
-											<div className="flex flex-col">
-												<span className="font-medium">
-													{instance.workspace_name}
-												</span>
-												<span className="text-xs text-content-secondary">
-													属主 {instance.username}
-												</span>
-											</div>
+											<span className="text-content-secondary">
+												{instance.username}
+											</span>
+											<span className="text-content-secondary"> / </span>
+											<span className="font-medium">
+												{instance.workspace_name}
+											</span>
 										</TableCell>
 										<TableCell>
 											<Badge variant="green" size="sm">
@@ -139,9 +116,6 @@ const DashboardPage: React.FC = () => {
 											{instance.used_cpu_cores.toFixed(2)} 核 ·{" "}
 											{formatGiB(instance.used_memory_gib)} ·{" "}
 											{formatGiB(instance.disk_used_gib)}
-										</TableCell>
-										<TableCell className="text-xs">
-											<GpuSummary instance={instance} />
 										</TableCell>
 										<TableCell className="text-xs">
 											{formatUptime(instance.uptime_seconds)}
@@ -175,8 +149,7 @@ const DashboardPage: React.FC = () => {
 				<DialogContent className="max-w-4xl">
 					<DialogHeader>
 						<DialogTitle>
-							实例 {gpuHistoryFor?.workspace_name}(属主{" "}
-							{gpuHistoryFor?.username})的 GPU 历史
+							{`${gpuHistoryFor?.username ?? ""} / ${gpuHistoryFor?.workspace_name ?? ""} 的 GPU 历史`}
 						</DialogTitle>
 					</DialogHeader>
 					{gpuHistoryFor && (

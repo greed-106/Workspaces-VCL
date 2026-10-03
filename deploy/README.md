@@ -986,6 +986,8 @@ xfs_quota report -p -b -n(需要 root)
 GET /capacity-api/volumes → used_gb / limit_gb
 ```
 
+删除卷时默认只删 k8s 对象、保留数据目录(接口带 `?purge=true` 才连目录一起删)。注意 purge 以服务用户(普通用户)的身份执行:如果目录里存在**工作区映射用户**创建的文件(例如容器内以映射用户写下的探针文件),purge 会报 `permission denied`,此时用 `sudo rm -rf <卷目录>` 手工清理即可。
+
 因此页面上的用量最多滞后一个定时器周期(≤3 分钟);`used_gb` 为 `null`(快照还没生成)时页面显示「—」,不会假装是 0。`limit_gb` 是 XFS 上真正生效的硬上限,`size_gb` 是当初的申请值,两者不一致时以 `limit_gb` 为准。
 
 ### 14.12 数据卷能否扩容 / 缩容
@@ -1000,6 +1002,21 @@ GET /capacity-api/volumes → used_gb / limit_gb
 | 调小 | 同样只改 `bhard`,数据不动。**XFS 允许把上限设到比已用还小**(实测:已用 200 MiB、上限设成 100 MiB,退出码 0,报表显示 Used > Hard),后果是之后的写入被内核拒绝(EDQUOT/ENOSPC),已有文件仍可读、不会丢;因此正确做法是在接口层拒绝「缩到小于已用」的请求 |
 | 使用中的卷 | 可以在挂载状态下调整(配额是内核层的事) |
 | 落地方式(若要做) | 用注解 `coder.com/hdd-volume-size-gb` 作为权威上限,配额脚本优先读它(缺省回落到 PVC 申请值),服务提供 `PATCH /volumes/{pvc}` 并在页面加「调整容量」入口;因为配额由 root 定时器应用,生效时间 ≤1 个周期 |
+
+**当前决策(2026-10-03):不做数据卷的扩容/缩容功能**,上面的实测结论保留备查;若以后要做,按最后一行落地。
+
+复现该验证的做法(在临时卷上做,做完删卷):
+
+```bash
+curl -s -X POST http://127.0.0.1:3998/volumes -H 'Content-Type: application/json' \
+  -d '{"owner":"admin","name":"resizetest","size_gb":100}'          # 建临时卷
+dd if=/dev/urandom of=/mnt/hdd-data/volumes/admin-resizetest/blob.bin bs=1M count=200
+kubectl patch pvc hdd-admin-resizetest -n coder-workspaces \
+  --type merge -p '{"spec":{"resources":{"requests":{"storage":"200Gi"}}}}'   # 预期被拒绝
+pid=$(python3 -c "import zlib;print(zlib.crc32(b'hdd-admin-resizetest')%4000000+100)")
+sudo xfs_quota -x -c "limit -p bhard=100m $pid" /mnt/hdd-data          # 上限压到已用以下:依然成功
+sudo xfs_quota -x -c "report -p -b -n" /mnt/hdd-data | grep "#$pid"    # 报表出现 Used > Hard
+```
 
 ## 十五、附录
 

@@ -7,15 +7,18 @@
 - 卷目录 = PVC 注解 coder.com/hdd-volume-path(缺省由 PVC 名推导);
 - 配额 = PVC 的 spec.resources.requests.storage → 容器内 df 看到的就是这个值,
   写超会被 XFS 内核直接拦下(和 SSD 上的工作区卷同一套机制);
-- HDD 需要以 prjquota 挂载(/etc/fstab 已加,重启后生效);未生效时本脚本直接跳过。
+- HDD 需要以 prjquota 挂载(/etc/fstab 已加,重启后生效);未生效时本脚本直接跳过;
+- 同时把「每个卷的已用/上限」写成快照 USAGE_FILE:cluster-capacity 服务以普通用户运行,
+  读不了 xfs_quota 的报表,由这里的 root 定时器代劳,页面据此显示实际使用量与使用率。
 """
-import json, os, re, subprocess, sys, zlib, pathlib
+import json, os, re, subprocess, sys, time, zlib, pathlib
 
 MOUNT = "__HDD_DATA__"
 VOLROOT = "__VOLUME_ROOT__"
 NAMESPACE = "__NAMESPACE__"
 KUBECONFIG = "__ADMIN_KUBECONFIG__"
 LABEL = "coder-hdd-volume=true"
+USAGE_FILE = "/run/coder-hdd-usage.json"
 DRY = "--dry-run" in sys.argv
 QUIET = "--quiet" in sys.argv
 
@@ -84,6 +87,39 @@ def xfs_quota(*args):
         log(f"  xfs_quota 失败: {r.stderr.strip() or r.stdout.strip()}")
 
 
+def quota_report():
+    """解析 xfs_quota 的项目报表(单位 KiB),返回 项目ID → (已用, 上限) 字节数。"""
+    if DRY:
+        return {}
+    r = subprocess.run(["xfs_quota", "-x", "-c", "report -p -b -n", MOUNT],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return {}
+    out = {}
+    for line in r.stdout.splitlines():
+        f = line.split()
+        if len(f) < 4 or not f[0].startswith("#"):
+            continue
+        try:
+            pid = int(f[0][1:])
+            out[pid] = (int(f[1]) * 1024, int(f[3]) * 1024)
+        except ValueError:
+            continue
+    return out
+
+
+def write_usage(entries):
+    """原子写入用量快照,权限 0644(服务以普通用户读取)。"""
+    if DRY:
+        log(f"  [dry-run] 写用量快照 {USAGE_FILE}: {len(entries)} 条")
+        return
+    tmp = USAGE_FILE + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump({"updated_at": int(time.time()), "volumes": entries}, fh)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, USAGE_FILE)
+
+
 def volumes():
     data = kubectl_json(["get", "pvc", "-n", NAMESPACE, "-l", LABEL, "-o", "json"])
     for item in data.get("items", []):
@@ -101,6 +137,8 @@ def main():
         return
     pathlib.Path(VOLROOT).mkdir(parents=True, exist_ok=True)
     n = 0
+    entries = {}
+    report = quota_report()
     for name, path, size in volumes():
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
         pid = project_id(name)
@@ -108,7 +146,10 @@ def main():
         xfs_quota("limit", "-p", f"bhard={to_bytes(size)}", str(pid))
         stale = sweep_uploads(path)
         log(f"  {name}: {path} → {size} (project {pid})" + (f", 清理残留分片 {stale} 个" if stale else ""))
+        used, limit = report.get(pid, (0, 0))
+        entries[name] = {"used_bytes": used, "limit_bytes": limit or to_bytes(size)}
         n += 1
+    write_usage(entries)
     log(f"共处理 {n} 个 HDD 卷")
 
 

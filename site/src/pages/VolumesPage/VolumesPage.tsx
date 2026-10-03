@@ -1,3 +1,5 @@
+import { cn } from "cn";
+import { RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "#/components/Button/Button";
 import { useAuthenticated } from "#/hooks/useAuthenticated";
@@ -25,6 +27,10 @@ type Volume = {
 	owner: string;
 	path: string;
 	size_gb: number;
+	/** 实际占用(null = 定时器快照还不可用) */
+	used_gb: number | null;
+	/** XFS project quota 上的生效上限(申请值被调整后以它为准) */
+	limit_gb: number;
 	phase: string;
 	in_use_by?: string[];
 };
@@ -38,6 +44,43 @@ const errorText = (error: unknown) =>
 
 const formatSize = (gb: number) =>
 	gb >= 1024 ? `${(gb / 1024).toFixed(2)} TB` : `${Math.round(gb)} GB`;
+
+const formatUsed = (gb: number | null) => {
+	if (gb === null) {
+		return "—";
+	}
+	if (gb >= 1) {
+		return `${gb.toFixed(gb >= 10 ? 1 : 2)} GB`;
+	}
+	return `${Math.round(gb * 1024)} MB`;
+};
+
+/** 细长用量条,颜色与状态条一致(超过 90% 转警示色)。 */
+const UsageBar: React.FC<{ used: number | null; total: number }> = ({
+	used,
+	total,
+}) => {
+	if (used === null || total <= 0) {
+		return <span className="text-content-secondary">—</span>;
+	}
+	const pct = Math.min(100, (used / total) * 100);
+	return (
+		<div className="flex items-center gap-2">
+			<div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-secondary">
+				<div
+					className={cn(
+						"h-full rounded-full",
+						pct >= 90 ? "bg-border-destructive" : "bg-content-primary",
+					)}
+					style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%` }}
+				/>
+			</div>
+			<span className="tabular-nums">
+				{pct < 1 && pct > 0 ? "<1" : pct.toFixed(0)}%
+			</span>
+		</div>
+	);
+};
 
 /** Throws with the service's message so callers can just try/catch. */
 const request = async (path: string, init?: RequestInit): Promise<unknown> => {
@@ -75,33 +118,70 @@ type HddInfo = {
 
 const HddCapacity: React.FC = () => {
 	const [info, setInfo] = useState<HddInfo | null>(null);
-	useEffect(() => {
-		const load = async () => {
-			try {
-				const res = await fetch(capacityUrl("/hdd"), { cache: "no-store" });
-				setInfo((await res.json()) as HddInfo);
-			} catch {
-				setInfo(null);
-			}
-		};
-		void load();
-		const timer = window.setInterval(() => void load(), 15000);
-		return () => window.clearInterval(timer);
+	const [loading, setLoading] = useState(false);
+
+	const load = useCallback(async () => {
+		setLoading(true);
+		try {
+			const res = await fetch(capacityUrl("/hdd"), { cache: "no-store" });
+			setInfo((await res.json()) as HddInfo);
+		} catch {
+			setInfo(null);
+		} finally {
+			setLoading(false);
+		}
 	}, []);
+
+	useEffect(() => {
+		void load();
+		const timer = window.setInterval(() => void load(), 10000);
+		return () => window.clearInterval(timer);
+	}, [load]);
+
 	if (!info) {
 		return null;
 	}
+	const usedPct =
+		info.total_gb > 0 ? Math.min(100, (info.used_gb / info.total_gb) * 100) : 0;
 	return (
 		<div
 			role="status"
-			className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-solid border-border-default bg-surface-secondary px-3 py-2 text-xs text-content-secondary"
+			className="flex items-center gap-4 rounded-md border border-solid border-border-default bg-surface-secondary px-3 py-2 text-xs text-content-secondary"
 		>
-			<span className="font-medium text-content-primary">HDD 容量</span>
-			<span>总计 {formatSize(info.total_gb)}</span>
-			<span>已用 {formatSize(info.used_gb)}</span>
-			<span>空闲 {formatSize(info.free_gb)}</span>
-			<span>卷 {info.volumes} 个</span>
-			{!info.prjquota_active && <span>硬配额尚未生效</span>}
+			<div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+				<span className="font-medium text-content-primary">
+					HDD 数据卷容量(hdd-data)
+				</span>
+				<span>总计 {formatSize(info.total_gb)}</span>
+				<span>已用 {formatSize(info.used_gb)}</span>
+				<span>空闲 {formatSize(info.free_gb)}</span>
+				<span>卷 {info.volumes} 个</span>
+				{!info.prjquota_active && <span>硬配额尚未生效</span>}
+				<div className="flex min-w-40 items-center gap-2">
+					<div className="h-1.5 w-32 overflow-hidden rounded-full bg-surface-primary">
+						<div
+							className={cn(
+								"h-full rounded-full",
+								usedPct >= 90 ? "bg-border-destructive" : "bg-content-primary",
+							)}
+							style={{ width: `${Math.max(usedPct, usedPct > 0 ? 2 : 0)}%` }}
+						/>
+					</div>
+					<span className="tabular-nums">
+						已用 {usedPct < 1 && usedPct > 0 ? "<1" : usedPct.toFixed(0)}%
+					</span>
+				</div>
+			</div>
+			<Button
+				variant="subtle"
+				size="icon"
+				className="size-6 shrink-0"
+				aria-label="刷新 HDD 容量"
+				disabled={loading}
+				onClick={() => void load()}
+			>
+				<RefreshCwIcon className={loading ? "animate-spin" : ""} />
+			</Button>
 		</div>
 	);
 };
@@ -308,6 +388,8 @@ const VolumesPage: React.FC = () => {
 								<tr className="text-left text-content-secondary">
 									<th className="py-2 pr-4 font-medium">卷名</th>
 									<th className="py-2 pr-4 font-medium">容量</th>
+									<th className="py-2 pr-4 font-medium">实际使用</th>
+									<th className="py-2 pr-4 font-medium">使用率</th>
 									<th className="py-2 pr-4 font-medium">状态</th>
 									<th className="py-2 pr-4 font-medium">使用中</th>
 									<th className="py-2 font-medium" />
@@ -320,7 +402,16 @@ const VolumesPage: React.FC = () => {
 										className="border-0 border-t border-solid border-border-default"
 									>
 										<td className="py-2 pr-4">{volume.name}</td>
-										<td className="py-2 pr-4">{formatSize(volume.size_gb)}</td>
+										<td className="py-2 pr-4">
+											{formatSize(volume.limit_gb || volume.size_gb)}
+										</td>
+										<td className="py-2 pr-4">{formatUsed(volume.used_gb)}</td>
+										<td className="py-2 pr-4">
+											<UsageBar
+												used={volume.used_gb}
+												total={volume.limit_gb || volume.size_gb}
+											/>
+										</td>
 										<td className="py-2 pr-4">{volume.phase}</td>
 										<td className="py-2 pr-4">
 											{(volume.in_use_by ?? []).length > 0
@@ -336,6 +427,57 @@ const VolumesPage: React.FC = () => {
 											>
 												删除
 											</Button>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
+				</section>
+				<section className="flex flex-col gap-2">
+					<h2 className="text-lg font-medium m-0">全部数据卷</h2>
+					<p className="text-xs text-content-secondary m-0">
+						所有用户的卷,只读展示:申请大小、实际占用与使用率。删除等操作只在自己
+						的卷上提供。
+					</p>
+					{volumes.length === 0 ? (
+						<p className="text-sm text-content-secondary m-0">还没有数据卷</p>
+					) : (
+						<table className="w-full border-collapse text-sm">
+							<thead>
+								<tr className="text-left text-content-secondary">
+									<th className="py-2 pr-4 font-medium">属主</th>
+									<th className="py-2 pr-4 font-medium">卷名</th>
+									<th className="py-2 pr-4 font-medium">申请大小</th>
+									<th className="py-2 pr-4 font-medium">实际使用</th>
+									<th className="py-2 pr-4 font-medium">使用率</th>
+									<th className="py-2 pr-4 font-medium">状态</th>
+									<th className="py-2 font-medium">使用中</th>
+								</tr>
+							</thead>
+							<tbody>
+								{volumes.map((volume) => (
+									<tr
+										key={volume.pvc}
+										className="border-0 border-t border-solid border-border-default"
+									>
+										<td className="py-2 pr-4">{volume.owner}</td>
+										<td className="py-2 pr-4">{volume.name}</td>
+										<td className="py-2 pr-4">
+											{formatSize(volume.limit_gb || volume.size_gb)}
+										</td>
+										<td className="py-2 pr-4">{formatUsed(volume.used_gb)}</td>
+										<td className="py-2 pr-4">
+											<UsageBar
+												used={volume.used_gb}
+												total={volume.limit_gb || volume.size_gb}
+											/>
+										</td>
+										<td className="py-2 pr-4">{volume.phase}</td>
+										<td className="py-2">
+											{(volume.in_use_by ?? []).length > 0
+												? volume.in_use_by?.join(", ")
+												: "—"}
 										</td>
 									</tr>
 								))}

@@ -13,6 +13,7 @@ ExecStart=/usr/local/bin/cluster-capacity \
     -mem-total-gib __MEM_TOTAL_GIB__ -mem-reserved-gib __MEM_RESERVED_GIB__ \
     -disk-budget-gb __DISK_BUDGET_GB__ \
     -volume-root __VOLUME_ROOT__ \
+    -volume-mount __HDD_DATA__ \
     -volume-storage-class __VOLUME_STORAGE_CLASS__ \
     -volume-node __NODE_NAME__
 Restart=always

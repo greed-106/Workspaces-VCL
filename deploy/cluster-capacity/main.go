@@ -78,6 +78,9 @@ type config struct {
 	volumeRoot         string
 	volumeStorageClass string
 	volumeNode         string
+	// HDD 文件系统的挂载点与配额定时器写出的用量快照。
+	volumeMount string
+	usageFile   string
 }
 
 func kubeClient(kubeconfig string) (kubernetes.Interface, error) {
@@ -291,6 +294,8 @@ func main() {
 	flag.StringVar(&cfg.volumeRoot, "volume-root", "/mnt/hdd-data/volumes", "directory holding HDD volume directories")
 	flag.StringVar(&cfg.volumeStorageClass, "volume-storage-class", "coder-hdd", "storage class used for HDD volume PVs")
 	flag.StringVar(&cfg.volumeNode, "volume-node", "", "node the HDD volumes are pinned to (defaults to the only node in the cluster)")
+	flag.StringVar(&cfg.volumeMount, "volume-mount", "/mnt/hdd-data", "mount point of the HDD filesystem holding the volume root")
+	flag.StringVar(&cfg.usageFile, "usage-file", "/run/coder-hdd-usage.json", "usage snapshot written by the HDD quota timer")
 	flag.Parse()
 
 	client, err := kubeClient(cfg.kubeconfig)

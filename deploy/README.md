@@ -966,6 +966,41 @@ curl -s http://workspace.mingjia.tech/gpu-api/healthz
 
 注意:模板里 `coder_app` 的 `share` 已改回 `owner`;控制面也移除了 `--dangerous-allow-path-app-sharing` 与 `--dangerous-allow-cors-requests`,因此"路径型 app 只能属主访问"是服务端强制的,老模板建出来的工作区同样生效。
 
+### 14.11 数据卷页面:HDD 实时看板与全量用量
+
+Volumes 页面顶部是 **hdd-data 的实时看板**(与工作区申请页的集群容量条同款式):总计 / 已用 / 空闲 / 卷数 + 使用率进度条 + 手动刷新,每 10 秒自动刷新一次。下面两张表都带「实际使用 / 使用率」:
+
+| 区块 | 内容 |
+| --- | --- |
+| 我的数据卷 | 卷名、容量(生效上限)、实际使用、使用率、状态、使用中、删除 |
+| 全部数据卷 | **所有用户**的卷(**只读**):属主、卷名、申请大小、实际使用、使用率、状态、使用中 |
+
+用量的来源与新鲜度:
+
+```text
+xfs_quota report -p -b -n(需要 root)
+   ▲ 由 coder-hdd-volume-quota.timer 每 3 分钟执行(它本来就在给每个卷设配额)
+   │ 顺带把每个卷的「已用 / 上限」写成快照
+/run/coder-hdd-usage.json(0644,原子写入)
+   ▲ cluster-capacity 服务以普通用户读取(它没有 root,读不了 xfs_quota 报表)
+GET /capacity-api/volumes → used_gb / limit_gb
+```
+
+因此页面上的用量最多滞后一个定时器周期(≤3 分钟);`used_gb` 为 `null`(快照还没生成)时页面显示「—」,不会假装是 0。`limit_gb` 是 XFS 上真正生效的硬上限,`size_gb` 是当初的申请值,两者不一致时以 `limit_gb` 为准。
+
+### 14.12 数据卷能否扩容 / 缩容
+
+**结论:容量本身可以调大调小,但不能靠改 PVC,要用注解 + 配额脚本这条路。**
+
+| 事项 | 实测结果 |
+| --- | --- |
+| 改 PVC 的 `spec.resources.requests.storage` | **被 k8s 拒绝**:`only dynamically provisioned pvc can be resized and the storageclass that provisions the pvc must support resize`。我们的 PV 是服务自己静态创建的,所以与 SC 是否开 `allowVolumeExpansion` 无关 |
+| 容量的真实实现 | 目录 + **XFS project quota** 的 `bhard`(脚本按申请值设置,每 3 分钟对齐一次) |
+| 调大 | 只需把 `bhard` 调大:立即生效、不用重启工作区、不影响读写;容器内 `df /mnt/data` 随之变大 |
+| 调小 | 同样只改 `bhard`,数据不动。**XFS 允许把上限设到比已用还小**(实测:已用 200 MiB、上限设成 100 MiB,退出码 0,报表显示 Used > Hard),后果是之后的写入被内核拒绝(EDQUOT/ENOSPC),已有文件仍可读、不会丢;因此正确做法是在接口层拒绝「缩到小于已用」的请求 |
+| 使用中的卷 | 可以在挂载状态下调整(配额是内核层的事) |
+| 落地方式(若要做) | 用注解 `coder.com/hdd-volume-size-gb` 作为权威上限,配额脚本优先读它(缺省回落到 PVC 申请值),服务提供 `PATCH /volumes/{pvc}` 并在页面加「调整容量」入口;因为配额由 root 定时器应用,生效时间 ≤1 个周期 |
+
 ## 十五、附录
 
 ### 15.1 关键配置文件

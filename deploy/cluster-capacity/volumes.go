@@ -36,11 +36,15 @@ const (
 )
 
 type volume struct {
-	Name    string   `json:"name"`
-	Owner   string   `json:"owner"`
-	PVC     string   `json:"pvc"`
-	Path    string   `json:"path"`
-	SizeGB  float64  `json:"size_gb"`
+	Name   string  `json:"name"`
+	Owner  string  `json:"owner"`
+	PVC    string  `json:"pvc"`
+	Path   string  `json:"path"`
+	SizeGB float64 `json:"size_gb"`
+	// UsedGB 是该卷目录的实际占用(null = 快照不可用),LimitGB 是 XFS project
+	// quota 上的硬上限(目前由 PVC 的申请容量驱动,后续扩容/缩容时它就是生效值)。
+	UsedGB  *float64 `json:"used_gb"`
+	LimitGB float64  `json:"limit_gb"`
 	Phase   string   `json:"phase"`
 	InUseBy []string `json:"in_use_by"`
 }
@@ -51,6 +55,31 @@ type hddInfo struct {
 	UsedGB  float64 `json:"used_gb"`
 	Volumes int     `json:"volumes"`
 	Quota   bool    `json:"prjquota_active"`
+}
+
+// usageSnapshot 读取配额定时器(root)写出的用量快照:/run/coder-hdd-usage.json。
+// 服务以普通用户运行,读不了 xfs_quota 的 project 报表,因此由定时器代劳,
+// 文件缺失或过期时返回 ok=false,页面显示「—」而不是假装 0。
+func (s *server) usageSnapshot() (map[string][2]float64, bool) {
+	raw, err := os.ReadFile(s.cfg.usageFile)
+	if err != nil {
+		return nil, false
+	}
+	var snap struct {
+		UpdatedAt int64 `json:"updated_at"`
+		Volumes   map[string]struct {
+			UsedBytes  float64 `json:"used_bytes"`
+			LimitBytes float64 `json:"limit_bytes"`
+		} `json:"volumes"`
+	}
+	if err := json.Unmarshal(raw, &snap); err != nil {
+		return nil, false
+	}
+	out := map[string][2]float64{}
+	for name, v := range snap.Volumes {
+		out[name] = [2]float64{v.UsedBytes, v.LimitBytes}
+	}
+	return out, true
 }
 
 // names 返回 (PVC 名, 目录名)
@@ -96,6 +125,8 @@ func (s *server) listVolumes(ctx context.Context) ([]volume, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 用量快照拿不到时不影响列表,只是不显示实际用量。
+	quota, quotaOK := s.usageSnapshot()
 	out := []volume{}
 	for _, pvc := range pvcs.Items {
 		owner := pvc.Labels[volumeOwnerLabel]
@@ -114,9 +145,19 @@ func (s *server) listVolumes(ctx context.Context) ([]volume, error) {
 		if q, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; ok {
 			sizeGB = bytesToGiB(q)
 		}
+		limitGB := sizeGB
+		var usedGB *float64
+		if q, ok := quota[pvc.Name]; ok && quotaOK {
+			v := q[0] / (1 << 30)
+			usedGB = &v
+			if q[1] > 0 {
+				limitGB = q[1] / (1 << 30)
+			}
+		}
 		out = append(out, volume{
 			Name: name, Owner: owner, PVC: pvc.Name, Path: path,
-			SizeGB: sizeGB, Phase: string(pvc.Status.Phase), InUseBy: used[pvc.Name],
+			SizeGB: sizeGB, UsedGB: usedGB, LimitGB: limitGB,
+			Phase: string(pvc.Status.Phase), InUseBy: used[pvc.Name],
 		})
 	}
 	return out, nil

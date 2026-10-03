@@ -1,0 +1,42 @@
+# NVIDIA GPU Operator 在 ubuntu0002 上的配置
+#
+# 模式:Operator 全权管理驱动 + 容器工具链(driver-less node)
+#
+# 2026-09-30 变更:主机原有的 Ubuntu NVIDIA 驱动(nvidia-driver-595-open 等 19 个包)
+# 已卸载,改由 Operator 的容器化驱动接管。**已生效,未重启即完成**:
+# 停掉 GPU 客户端 Pod 后用 rmmod 卸掉旧模块,驱动容器随即安装并加载了 595.91.07。
+# 详见 ~/k8s-setup/README.md 第十一节(含当时踩的两个坑和修法)。
+#
+# 重启行为:/run 是 tmpfs,所以每次重启后驱动容器会重装一遍驱动(约 2-4 分钟),
+# 期间 GPU 不可用,之后 operator 会自动把 toolkit/device plugin/GFD/DCGM 拉起。
+#
+# 前提(已确认):
+#   - Secure Boot 已禁用(否则未签名/自动构建的模块加载不了)
+#   - 当前内核 6.8.0-142-generic 的头文件已安装(容器化驱动需要时能编译模块)
+#   - nouveau 已屏蔽:/etc/modprobe.d/blacklist-nouveau-k8s.conf
+#   - 驱动镜像已预拉:nvcr.io/nvidia/driver:595.91.07-ubuntu24.04
+#
+# 为什么 NFD 镜像要换源:registry.k8s.io 在本机不可达(307 重定向到被墙的 *.pkg.dev)。
+# 注意 values 路径是子 chart 名 node-feature-discovery(子 chart 没设 alias),
+# 写成 nfd.image.* 是不生效的。
+
+driver:
+  enabled: true
+  # 主机原来跑的就是 open 模块(包名带 -open),Ampere 架构完全支持,
+  # 且 NVIDIA 从 560 系列起把 open 模块作为默认方向。显式写死,避免 auto 的歧义。
+  kernelModuleType: "open"
+  version: "595.91.07"
+  # 锁死版本,禁止 operator 自动升级驱动(2026-09-30 按要求设置)
+  upgradePolicy:
+    autoUpgrade: false
+
+toolkit:
+  enabled: true
+
+node-feature-discovery:
+  image:
+    repository: k8s.m.daocloud.io/nfd/node-feature-discovery
+    tag: v0.19.0
+
+cdi:
+  enabled: true

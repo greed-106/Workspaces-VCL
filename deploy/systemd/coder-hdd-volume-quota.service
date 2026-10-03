@@ -1,0 +1,7 @@
+[Unit]
+Description=Apply XFS project quotas to Coder HDD volumes
+After=kubelet.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/coder-hdd-volume-quota.py --quiet

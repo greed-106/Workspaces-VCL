@@ -1,0 +1,196 @@
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { userEvent, within } from "storybook/test";
+import {
+	MockBuildInfo,
+	MockUserMember,
+	MockUserOwner,
+} from "#/testHelpers/entities";
+import { pixelWithDesktop, pixelWithTablet } from "#/testHelpers/pixel";
+import { withDashboardProvider } from "#/testHelpers/storybook";
+import { NavbarView } from "./NavbarView";
+
+const meta: Meta<typeof NavbarView> = {
+	title: "modules/dashboard/NavbarView",
+	parameters: {
+		pixel: { matrix: pixelWithTablet },
+		layout: "fullscreen",
+	},
+	component: NavbarView,
+	args: {
+		user: MockUserOwner,
+		adminPermissions: {
+			canViewDeployment: true,
+			canViewOrganizations: true,
+			canViewAuditLog: true,
+			canViewConnectionLog: true,
+			canViewAIBridge: true,
+			canViewHealth: true,
+		},
+		canCreateChat: true,
+		canViewLicenses: false,
+		supportLinks: [],
+	},
+	decorators: [withDashboardProvider],
+};
+
+export default meta;
+type Story = StoryObj<typeof NavbarView>;
+
+export const ForAdmin: Story = {
+	parameters: { pixel: { matrix: pixelWithDesktop } },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Admin settings" }),
+		);
+	},
+};
+
+export const ForAuditor: Story = {
+	parameters: { pixel: { matrix: pixelWithDesktop } },
+	args: {
+		user: MockUserMember,
+		adminPermissions: {
+			canViewAuditLog: true,
+		},
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Admin settings" }),
+		);
+	},
+};
+
+export const ForOrgAdmin: Story = {
+	parameters: { pixel: { matrix: pixelWithDesktop } },
+	args: {
+		user: MockUserMember,
+		adminPermissions: {
+			canViewAuditLog: true,
+			canViewOrganizations: true,
+		},
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Admin settings" }),
+		);
+	},
+};
+
+export const ForSingleOrgOSSAdmin: Story = {
+	parameters: { pixel: { matrix: pixelWithDesktop } },
+	args: {
+		adminPermissions: {
+			canViewDeployment: true,
+		},
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Admin settings" }),
+		);
+	},
+};
+
+export const ForUserWithoutOrganization: Story = {
+	args: {
+		user: MockUserMember,
+		adminPermissions: {},
+		canCreateChat: false,
+	},
+};
+
+export const ForMember: Story = {
+	args: {
+		user: MockUserMember,
+		adminPermissions: {},
+		canCreateChat: true,
+	},
+};
+
+export const SupportLinks: Story = {
+	args: {
+		user: MockUserMember,
+		adminPermissions: {},
+		supportLinks: [
+			{
+				name: "This is a bug",
+				icon: "bug",
+				target: "#",
+			},
+			{
+				name: "This is a star",
+				icon: "star",
+				target: "#",
+				location: "navbar",
+			},
+			{
+				name: "This is a chat",
+				icon: "chat",
+				target: "#",
+				location: "navbar",
+			},
+			{
+				name: "No icon here",
+				icon: "",
+				target: "#",
+				location: "navbar",
+			},
+			{
+				name: "No icon here too",
+				icon: "",
+				target: "#",
+			},
+		],
+	},
+};
+
+export const DefaultSupportLinks: Story = {
+	args: {
+		user: MockUserMember,
+		adminPermissions: {},
+		supportLinks: [
+			{ icon: "docs", name: "Documentation", target: "" },
+			{ icon: "bug", name: "Report a bug", target: "" },
+			{
+				icon: "chat",
+				name: "Join the Coder Discord",
+				target: "",
+				location: "navbar",
+			},
+			{ icon: "star", name: "Star the Repo", target: "" },
+		],
+	},
+};
+
+export const DevelBuild: Story = {
+	args: {
+		buildInfo: {
+			...MockBuildInfo,
+			version: "v2.21.0-devel+abc123",
+			external_url: "https://github.com/coder/coder/commit/abc123",
+		},
+	},
+};
+
+export const RcBuild: Story = {
+	args: {
+		buildInfo: {
+			...MockBuildInfo,
+			version: "v2.21.0-rc.1+def456",
+			external_url: "https://github.com/coder/coder/releases/tag/v2.21.0-rc.1",
+		},
+	},
+};
+
+export const RcDevelBuild: Story = {
+	args: {
+		buildInfo: {
+			...MockBuildInfo,
+			version: "v2.33.0-rc.1-devel+727ec00f7",
+			external_url: "https://github.com/coder/coder/commit/727ec00f7",
+		},
+	},
+};

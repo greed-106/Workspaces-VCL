@@ -1,0 +1,48 @@
+import { Fragment } from "react";
+import { TimelineDateRow } from "#/components/Timeline/TimelineDateRow";
+
+type GetDateFn<TData> = (data: TData) => Date;
+
+const groupByDate = <TData,>(
+	items: readonly TData[],
+	getDate: GetDateFn<TData>,
+): Record<string, TData[]> => {
+	const itemsByDate: Record<string, TData[]> = {};
+
+	for (const item of items) {
+		const dateKey = getDate(item).toDateString();
+
+		if (dateKey in itemsByDate) {
+			itemsByDate[dateKey].push(item);
+		} else {
+			itemsByDate[dateKey] = [item];
+		}
+	}
+
+	return itemsByDate;
+};
+
+type TimelineProps<TData> = {
+	items: readonly TData[];
+	getDate: GetDateFn<TData>;
+	row: (item: TData) => React.JSX.Element;
+};
+
+export const Timeline = <TData,>({
+	items,
+	getDate,
+	row,
+}: TimelineProps<TData>): React.JSX.Element => {
+	const itemsByDate = groupByDate(items, getDate);
+
+	return (
+		<>
+			{Object.entries(itemsByDate).map(([dateStr, items]) => (
+				<Fragment key={dateStr}>
+					<TimelineDateRow date={new Date(dateStr)} />
+					{items.map(row)}
+				</Fragment>
+			))}
+		</>
+	);
+};

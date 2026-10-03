@@ -1,0 +1,7 @@
+[Unit]
+Description=Apply XFS project quotas to Coder workspace volumes
+After=kubelet.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/coder-workspace-quota.py

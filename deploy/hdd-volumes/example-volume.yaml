@@ -1,0 +1,41 @@
+# HDD 卷的模板:PV(Retain,绑节点)+ PVC(coder-workspaces 命名空间)
+# 命名约定:PV/PVC 名 = hdd-<owner>-<name>;目录 = /mnt/hdd-data/volumes/<owner>-<name>
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: hdd-admin-hddtest
+  labels:
+    coder-hdd-volume: "true"
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: coder-hdd
+  local:
+    path: /mnt/hdd-data/volumes/admin-hddtest
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["ubuntu0002"]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hdd-admin-hddtest
+  namespace: coder-workspaces
+  labels:
+    coder-hdd-volume: "true"
+    coder-hdd-owner: "admin"
+  annotations:
+    coder.com/hdd-volume-path: /mnt/hdd-data/volumes/admin-hddtest
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: coder-hdd
+  volumeName: hdd-admin-hddtest
+  resources:
+    requests:
+      storage: 100Gi

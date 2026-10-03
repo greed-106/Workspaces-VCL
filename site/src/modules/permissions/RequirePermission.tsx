@@ -1,0 +1,45 @@
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "#/components/Dialog/Dialog";
+import { Link } from "#/components/Link/Link";
+
+type RequirePermissionProps = {
+	children?: React.ReactNode;
+	isFeatureVisible: boolean;
+};
+
+/**
+ * Wraps routes that are available based on RBAC or licensing.
+ */
+export const RequirePermission: React.FC<RequirePermissionProps> = ({
+	children,
+	isFeatureVisible,
+}) => {
+	if (!isFeatureVisible) {
+		return (
+			<Dialog open>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>
+							You don't have permission to view this page
+						</DialogTitle>
+					</DialogHeader>
+					<DialogDescription>
+						If you believe this is a mistake, please contact your administrator
+						or try signing in with different credentials.
+					</DialogDescription>
+					<DialogFooter>
+						<Link href="/">Go to workspaces</Link>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		);
+	}
+
+	return children;
+};

@@ -1,0 +1,30 @@
+# 参数留空时挂载的占位卷:让模板里的挂载可以"无条件"存在,
+# 从而避免 count/for_each 需要 plan 阶段已知值的问题。
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: hdd-none
+spec:
+  capacity: {storage: 1Gi}
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: coder-hdd
+  local: {path: /mnt/hdd-data/volumes/_placeholder}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - {key: kubernetes.io/hostname, operator: In, values: ["ubuntu0002"]}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hdd-none
+  namespace: coder-workspaces
+  labels:
+    coder-hdd-volume: "true"
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: coder-hdd
+  volumeName: hdd-none
+  resources: {requests: {storage: 1Gi}}

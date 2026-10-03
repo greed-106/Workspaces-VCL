@@ -1,0 +1,19 @@
+[Unit]
+Description=Live cluster capacity JSON for the Coder workspace creation page
+After=kubelet.service network-online.target
+Wants=network-online.target
+
+[Service]
+User=mingjia
+ExecStart=/usr/local/bin/cluster-capacity \
+    -addr :3999 \
+    -namespace coder-workspaces \
+    -kubeconfig /data/mingjia/.kube/config \
+    -cpu-total 48 -cpu-overcommit 2 -cpu-reserved 4 \
+    -mem-total-gib 377 -mem-reserved-gib 16 \
+    -disk-budget-gb 6800
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

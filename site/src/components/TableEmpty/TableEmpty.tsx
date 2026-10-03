@@ -1,0 +1,17 @@
+import {
+	EmptyState,
+	type EmptyStateProps,
+} from "#/components/EmptyState/EmptyState";
+import { TableCell, TableRow } from "#/components/Table/Table";
+
+type TableEmptyProps = EmptyStateProps;
+
+export const TableEmpty: React.FC<TableEmptyProps> = (props) => {
+	return (
+		<TableRow>
+			<TableCell colSpan={999}>
+				<EmptyState {...props} />
+			</TableCell>
+		</TableRow>
+	);
+};

@@ -1,0 +1,40 @@
+[Unit]
+Description=Coder control plane (development instance, single node)
+Documentation=https://coder.com/docs
+# 不依赖任何数据库:coderd 自己会拉起内嵌 PostgreSQL。
+# 等 kubelet 只是为了少一次"k8s 还没就绪"的建工作区失败。
+After=network-online.target kubelet.service
+Wants=network-online.target
+# 需要 SSD 上的 TMPDIR;数据目录在根分区,随时可用。
+RequiresMountsFor=/mnt/ssd-data
+StartLimitIntervalSec=120
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=mingjia
+Group=mingjia
+WorkingDirectory=/data/mingjia/code/coder
+Environment=HOME=/data/mingjia
+Environment=TMPDIR=/mnt/ssd-data/tmp
+Environment=PATH=/usr/local/go/bin:/mnt/ssd-data/mingjia-caches/go/bin:/data/mingjia/.local/share/fnm/node-versions/v24.21.0/installation/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/data/mingjia/code/coder/build/coder_linux_amd64 \
+    --global-config /data/mingjia/code/coder/.coderv2 \
+    server \
+    --http-address 0.0.0.0:3001 \
+    --swagger-enable \
+    --dangerous-allow-cors-requests=true \
+    --dangerous-allow-path-app-sharing=true \
+    --enable-terraform-debug-mode \
+    --access-url http://10.129.164.15:3001 \
+    --prometheus-enable \
+    --prometheus-address 0.0.0.0:2114 \
+    --prometheus-collect-agent-stats \
+    --prometheus-collect-db-metrics
+Restart=always
+RestartSec=10
+StandardOutput=append:/mnt/ssd-data/logs/coderd.log
+StandardError=append:/mnt/ssd-data/logs/coderd.log
+
+[Install]
+WantedBy=multi-user.target

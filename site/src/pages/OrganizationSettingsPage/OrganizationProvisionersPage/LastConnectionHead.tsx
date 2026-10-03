@@ -1,0 +1,27 @@
+import { InfoIcon } from "lucide-react";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "#/components/Tooltip/Tooltip";
+export const LastConnectionHead: React.FC = () => {
+	return (
+		<span className="flex items-center gap-1 whitespace-nowrap text-xs font-medium text-content-secondary">
+			Last connection
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<span className="flex items-center">
+						<span className="sr-only">More info</span>
+						<InfoIcon
+							tabIndex={0}
+							className="cursor-pointer size-icon-xs p-0.5"
+						/>
+					</span>
+				</TooltipTrigger>
+				<TooltipContent className="max-w-xs">
+					Last time the provisioner connected to the control plane
+				</TooltipContent>
+			</Tooltip>
+		</span>
+	);
+};

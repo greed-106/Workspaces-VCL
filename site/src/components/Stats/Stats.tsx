@@ -1,0 +1,46 @@
+import { cn } from "cn";
+
+export const Stats: React.FC<React.ComponentProps<"div">> = ({
+	children,
+	className,
+	...attrs
+}) => {
+	return (
+		<div
+			className={cn(
+				"p-4 rounded-[8px] block flex-wrap items-center m-0 text-content-secondary border border-solid border-border text-sm leading-relaxed font-normal md:py-0 md:flex",
+				className,
+			)}
+			{...attrs}
+		>
+			{children}
+		</div>
+	);
+};
+
+type StatsItemProps = React.ComponentProps<"div"> & {
+	label: string;
+	value: React.ReactNode;
+};
+
+export const StatsItem: React.FC<StatsItemProps> = ({
+	label,
+	value,
+	className,
+	...attrs
+}) => {
+	return (
+		<div
+			className={cn(
+				"text-sm p-2 flex items-baseline gap-2 md:py-3.5 md:px-4",
+				className,
+			)}
+			{...attrs}
+		>
+			<span className="block wrap-break-word">{label}:</span>
+			<span className="flex items-center wrap-break-word text-content-primary [&_a]:text-content-primary [&_a]:no-underline [&_a]:font-semibold [&_a:hover]:no-underline">
+				{value}
+			</span>
+		</div>
+	);
+};

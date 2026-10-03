@@ -1,0 +1,9 @@
+# 构建产物与临时文件
+workspace-image/code-server.tar.gz
+**/__pycache__/
+*.pyc
+*.log
+
+# 编译产物(源码在 cluster-capacity/main.go,用 go build 重建)
+cluster-capacity/cluster-capacity
+cluster-capacity/cluster-capacity-*

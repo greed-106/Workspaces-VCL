@@ -1,0 +1,917 @@
+import { cn } from "cn";
+import {
+	BanIcon,
+	CircleAlertIcon,
+	EllipsisVerticalIcon,
+	ExternalLinkIcon,
+	FileIcon,
+	PlayIcon,
+	RefreshCcwIcon,
+	RotateCcwIcon,
+	SquareTerminalIcon,
+	StarIcon,
+} from "lucide-react";
+import type React from "react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "react-query";
+import { Link, useNavigate } from "react-router";
+import { API } from "#/api/api";
+import { templateVersion } from "#/api/queries/templates";
+import {
+	cancelBuild,
+	deleteWorkspace,
+	setOptimisticWorkspaceListBuildStatus,
+	startWorkspace,
+	stopWorkspace,
+} from "#/api/queries/workspaces";
+import type {
+	Template,
+	Workspace,
+	WorkspaceAgent,
+	WorkspaceApp,
+} from "#/api/typesGenerated";
+import { Avatar } from "#/components/Avatar/Avatar";
+import { AvatarData } from "#/components/Avatar/AvatarData";
+import { AvatarDataSkeleton } from "#/components/Avatar/AvatarDataSkeleton";
+import { Button } from "#/components/Button/Button";
+import { Checkbox } from "#/components/Checkbox/Checkbox";
+import { ConfirmDialog } from "#/components/Dialog/ConfirmDialog/ConfirmDialog";
+import { ExternalImage } from "#/components/ExternalImage/ExternalImage";
+import { Skeleton } from "#/components/Skeleton/Skeleton";
+import { Spinner } from "#/components/Spinner/Spinner";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "#/components/Table/Table";
+import {
+	TableLoaderSkeleton,
+	TableRowSkeleton,
+} from "#/components/TableLoader/TableLoader";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "#/components/Tooltip/Tooltip";
+import { useAuthenticated } from "#/hooks/useAuthenticated";
+import { useClickableTableRow } from "#/hooks/useClickableTableRow";
+import {
+	getTerminalHref,
+	isAppUrlValid,
+	openAppInNewWindow,
+} from "#/modules/apps/apps";
+import { useAppLink } from "#/modules/apps/useAppLink";
+import { findWorkspaceAppWithAgent } from "#/modules/apps/workspaceApps";
+import { useDashboard } from "#/modules/dashboard/useDashboard";
+import { abilitiesByWorkspaceStatus } from "#/modules/workspaces/actions";
+import { WorkspaceBuildCancelDialog } from "#/modules/workspaces/WorkspaceBuildCancelDialog/WorkspaceBuildCancelDialog";
+import { WorkspaceMoreActions } from "#/modules/workspaces/WorkspaceMoreActions/WorkspaceMoreActions";
+import { WorkspaceOutdatedTooltip } from "#/modules/workspaces/WorkspaceOutdatedTooltip/WorkspaceOutdatedTooltip";
+import { WorkspaceStatus } from "#/modules/workspaces/WorkspaceStatus/WorkspaceStatus";
+import {
+	useWorkspaceUpdate,
+	WorkspaceUpdateDialogs,
+} from "#/modules/workspaces/WorkspaceUpdateDialogs";
+import { getDisplayWorkspaceTemplateName } from "#/utils/workspace";
+import { WorkspaceSharingIndicator } from "./WorkspaceSharingIndicator";
+import { WorkspacesEmpty } from "./WorkspacesEmpty";
+
+type WorkspacesTableProps = {
+	workspaces?: readonly Workspace[];
+	checkedWorkspaces: readonly Workspace[];
+	error?: unknown;
+	isUsingFilter: boolean;
+	onClearFilter: () => void;
+	onCheckChange: (checkedWorkspaces: readonly Workspace[]) => void;
+	templates?: Template[];
+	canCreateTemplate: boolean;
+	canCreateWorkspace: boolean;
+	onActionSuccess: () => Promise<void>;
+	onActionError: (error: unknown) => void;
+	chatsByWorkspace?: Record<string, string>;
+};
+
+export const WorkspacesTable: React.FC<WorkspacesTableProps> = ({
+	workspaces,
+	checkedWorkspaces,
+	isUsingFilter,
+	onClearFilter,
+	onCheckChange,
+	templates,
+	canCreateTemplate,
+	canCreateWorkspace,
+	onActionSuccess,
+	onActionError,
+}) => {
+	const dashboard = useDashboard();
+	const isLoading = !workspaces;
+	const isEmpty = workspaces && workspaces.length === 0;
+	const hideHeaders = isLoading || isEmpty;
+
+	return (
+		<Table>
+			<TableHeader>
+				<TableRow>
+					<TableHead className="w-1/3">
+						{isLoading ? (
+							<Skeleton className="h-4 w-40" />
+						) : (
+							<div
+								className={cn(
+									"flex items-center gap-5",
+									isEmpty && "invisible",
+								)}
+							>
+								<Checkbox
+									disabled={isEmpty}
+									checked={
+										!isEmpty && checkedWorkspaces.length === workspaces.length
+									}
+									onCheckedChange={(checked) => {
+										if (!checked) {
+											onCheckChange([]);
+										} else {
+											onCheckChange(workspaces);
+										}
+									}}
+									aria-label="Select all workspaces"
+									className="my-0"
+								/>
+								Name
+							</div>
+						)}
+					</TableHead>
+					<TableHead className={cn("w-1/3", hideHeaders && "invisible")}>
+						Template
+					</TableHead>
+					<TableHead className={cn("w-1/3", hideHeaders && "invisible")}>
+						Status
+					</TableHead>
+					<TableHead className="w-0">
+						<span className="sr-only">Actions</span>
+					</TableHead>
+				</TableRow>
+			</TableHeader>
+			<TableBody className="[&_td]:h-[72px]">
+				{isLoading && <TableLoader />}
+				{isEmpty && (
+					<TableRow>
+						<TableCell colSpan={999}>
+							<WorkspacesEmpty
+								templates={templates}
+								isUsingFilter={isUsingFilter}
+								onClearFilter={onClearFilter}
+								canCreateTemplate={canCreateTemplate}
+								canCreateWorkspace={canCreateWorkspace}
+							/>
+						</TableCell>
+					</TableRow>
+				)}
+				{workspaces?.map((workspace) => {
+					const checked = checkedWorkspaces.some((w) => w.id === workspace.id);
+					const activeOrg = dashboard.organizations.find(
+						(o) => o.id === workspace.organization_id,
+					);
+					const workspacePageLink = `/@${workspace.owner_name}/${workspace.name}`;
+
+					return (
+						<WorkspacesRow
+							workspace={workspace}
+							workspacePageLink={workspacePageLink}
+							key={workspace.id}
+							checked={checked}
+						>
+							<TableCell>
+								<div className="flex items-center gap-5">
+									<Checkbox
+										data-testid={`checkbox-${workspace.id}`}
+										disabled={cantBeChecked(workspace)}
+										checked={checked}
+										onClick={(e) => {
+											e.stopPropagation();
+										}}
+										onCheckedChange={(checked) => {
+											if (checked) {
+												onCheckChange([...checkedWorkspaces, workspace]);
+											} else {
+												onCheckChange(
+													checkedWorkspaces.filter(
+														(w) => w.id !== workspace.id,
+													),
+												);
+											}
+										}}
+										aria-label={`Select workspace ${workspace.name}`}
+									/>
+									<AvatarData
+										title={
+											<div className="flex items-center gap-1">
+												<Link
+													to={workspacePageLink}
+													className="whitespace-nowrap select-none"
+												>
+													{workspace.name}
+												</Link>
+												{workspace.favorite && (
+													<StarIcon className="size-icon-xs" />
+												)}
+												{workspace.outdated && (
+													<WorkspaceOutdatedTooltip workspace={workspace} />
+												)}
+											</div>
+										}
+										subtitle={
+											<div className="flex items-center gap-1">
+												<span className="sr-only">Owner: </span>
+												<div className="flex gap-2">
+													{workspace.owner_name}
+													{workspace.shared_with &&
+														workspace.shared_with.length > 0 && (
+															<WorkspaceSharingIndicator
+																sharedWith={workspace.shared_with}
+																settingsPath={`/@${workspace.owner_name}/${workspace.name}/settings/sharing`}
+															/>
+														)}
+												</div>
+											</div>
+										}
+										avatar={
+											<Avatar
+												src={workspace.owner_avatar_url}
+												fallback={workspace.owner_name}
+												size="lg"
+											/>
+										}
+									/>
+								</div>
+							</TableCell>
+
+							<TableCell>
+								<AvatarData
+									title={
+										<span className="whitespace-nowrap block max-w-52 text-ellipsis overflow-hidden">
+											{getDisplayWorkspaceTemplateName(workspace)}
+										</span>
+									}
+									subtitle={
+										dashboard.showOrganizations && (
+											<>
+												<span className="sr-only">Organization:</span>{" "}
+												{activeOrg?.display_name || workspace.organization_name}
+											</>
+										)
+									}
+									avatar={
+										<Avatar
+											variant="icon"
+											src={workspace.template_icon}
+											fallback={getDisplayWorkspaceTemplateName(workspace)}
+											size="lg"
+										/>
+									}
+								/>
+							</TableCell>
+
+							<TableCell>
+								<WorkspaceStatus workspace={workspace} />
+							</TableCell>
+
+							<WorkspaceActionsCell
+								workspace={workspace}
+								onActionSuccess={onActionSuccess}
+								onActionError={onActionError}
+							/>
+						</WorkspacesRow>
+					);
+				})}
+			</TableBody>
+		</Table>
+	);
+};
+
+type WorkspacesRowProps = {
+	workspace: Workspace;
+	workspacePageLink: string;
+	children?: React.ReactNode;
+	checked: boolean;
+};
+
+const WorkspacesRow: React.FC<WorkspacesRowProps> = ({
+	workspace,
+	workspacePageLink,
+	children,
+	checked,
+}) => {
+	const navigate = useNavigate();
+
+	const openLinkInNewTab = () => window.open(workspacePageLink, "_blank");
+	const { role, hover, ...clickableProps } = useClickableTableRow({
+		onMiddleClick: openLinkInNewTab,
+		onClick: (event) => {
+			// Order of booleans actually matters here for Windows-Mac compatibility;
+			// meta key is Cmd on Macs, but on Windows, it's either the Windows key,
+			// or the key does nothing at all (depends on the browser)
+			const shouldOpenInNewTab =
+				event.shiftKey || event.metaKey || event.ctrlKey;
+
+			if (shouldOpenInNewTab) {
+				openLinkInNewTab();
+			} else {
+				navigate(workspacePageLink);
+			}
+		},
+	});
+
+	return (
+		<TableRow
+			{...clickableProps}
+			data-testid={`workspace-${workspace.id}`}
+			className={cn([
+				checked ? "bg-surface-secondary hover:bg-surface-secondary" : undefined,
+				clickableProps.className,
+			])}
+		>
+			{children}
+		</TableRow>
+	);
+};
+
+const TableLoader: React.FC = () => {
+	return (
+		<TableLoaderSkeleton>
+			<TableRowSkeleton>
+				<TableCell className="w-2/6">
+					<div className="flex items-center gap-5">
+						<Checkbox disabled />
+						<AvatarDataSkeleton />
+					</div>
+				</TableCell>
+				<TableCell className="w-2/6">
+					<AvatarDataSkeleton />
+				</TableCell>
+				<TableCell className="w-2/6">
+					<Skeleton className="h-4 w-1/2" />
+				</TableCell>
+				<TableCell className="w-0 ">
+					<div className="flex gap-1 justify-end">
+						<Skeleton className="size-10" />
+						<Button size="icon-lg" variant="subtle" disabled>
+							<EllipsisVerticalIcon aria-hidden="true" />
+						</Button>
+					</div>
+				</TableCell>
+			</TableRowSkeleton>
+		</TableLoaderSkeleton>
+	);
+};
+
+const cantBeChecked = (workspace: Workspace) => {
+	return ["deleting", "pending"].includes(workspace.latest_build.status);
+};
+
+type WorkspaceActionsCellProps = {
+	workspace: Workspace;
+	onActionSuccess: () => Promise<void>;
+	onActionError: (error: unknown) => void;
+};
+
+const WorkspaceActionsCell: React.FC<WorkspaceActionsCellProps> = ({
+	workspace,
+	onActionSuccess,
+	onActionError,
+}) => {
+	const { user } = useAuthenticated();
+
+	const queryClient = useQueryClient();
+	const abilities = abilitiesByWorkspaceStatus(workspace, {
+		canDebug: false,
+		isOwner: user.roles.find((role) => role.name === "owner") !== undefined,
+	});
+
+	const startWorkspaceOptions = startWorkspace(workspace, queryClient);
+	const startWorkspaceMutation = useMutation({
+		...startWorkspaceOptions,
+		onSuccess: async (build) => {
+			startWorkspaceOptions.onSuccess(build);
+			await onActionSuccess();
+		},
+		onError: onActionError,
+	});
+
+	const stopWorkspaceOptions = stopWorkspace(workspace, queryClient);
+	const stopWorkspaceMutation = useMutation({
+		...stopWorkspaceOptions,
+		onSuccess: async (build) => {
+			stopWorkspaceOptions.onSuccess(build);
+			await onActionSuccess();
+		},
+		onError: onActionError,
+	});
+
+	const restartWorkspaceMutation = useMutation({
+		mutationFn: API.restartWorkspace,
+		// restartWorkspace resolves only after the full stop/start sequence and
+		// the list has no live updates, so optimistically show the row as
+		// stopping. This reflects the restart immediately and flips the list to
+		// its fast poll interval, which then tracks the real build statuses.
+		onMutate: async () => {
+			await queryClient.cancelQueries({
+				queryKey: ["workspaces"],
+			});
+			return {
+				rollback: setOptimisticWorkspaceListBuildStatus(
+					queryClient,
+					workspace.id,
+					"stopping",
+					"stop",
+				),
+			};
+		},
+		onSuccess: async () => {
+			await onActionSuccess();
+		},
+		onError: (error, _variables, context) => {
+			context?.rollback?.();
+			onActionError(error);
+		},
+	});
+
+	const cancelJobOptions = cancelBuild(workspace, queryClient);
+	const cancelBuildMutation = useMutation({
+		...cancelJobOptions,
+		onSuccess: async () => {
+			cancelJobOptions.onSuccess();
+			await onActionSuccess();
+		},
+		onError: onActionError,
+	});
+
+	const { data: latestVersion } = useQuery({
+		...templateVersion(workspace.template_active_version_id),
+		enabled: workspace.outdated,
+	});
+	const workspaceUpdate = useWorkspaceUpdate({
+		workspace,
+		latestVersion,
+		onSuccess: onActionSuccess,
+		onError: onActionError,
+	});
+
+	const deleteWorkspaceOptions = deleteWorkspace(workspace, queryClient);
+	const deleteWorkspaceMutation = useMutation({
+		...deleteWorkspaceOptions,
+		onSuccess: async (build) => {
+			deleteWorkspaceOptions.onSuccess(build);
+			await onActionSuccess();
+		},
+		onError: onActionError,
+	});
+
+	const [isStopConfirmOpen, setIsStopConfirmOpen] = useState(false);
+	const [isRestartConfirmOpen, setIsRestartConfirmOpen] = useState(false);
+	const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+
+	const isRetrying =
+		startWorkspaceMutation.isPending ||
+		stopWorkspaceMutation.isPending ||
+		deleteWorkspaceMutation.isPending;
+
+	const retry = () => {
+		switch (workspace.latest_build.transition) {
+			case "start":
+				startWorkspaceMutation.mutate({});
+				break;
+			case "stop":
+				stopWorkspaceMutation.mutate({});
+				break;
+			case "delete":
+				deleteWorkspaceMutation.mutate({});
+				break;
+		}
+	};
+
+	return (
+		<TableCell
+			onClick={(e) => {
+				// Prevent the click in the actions to trigger the row click
+				e.stopPropagation();
+			}}
+		>
+			<div className="flex gap-1 justify-end">
+				{workspace.latest_build.status === "running" &&
+					(workspace.latest_app_status ? (
+						<WorkspaceAppStatusLinks workspace={workspace} />
+					) : (
+						<WorkspaceApps workspace={workspace} />
+					))}
+
+				{abilities.actions.includes("start") && (
+					<PrimaryAction
+						onClick={() => startWorkspaceMutation.mutate({})}
+						isLoading={startWorkspaceMutation.isPending}
+						label="Start workspace"
+					>
+						<PlayIcon />
+					</PrimaryAction>
+				)}
+
+				{abilities.actions.includes("updateAndStart") && (
+					<>
+						<PrimaryAction
+							onClick={workspaceUpdate.update}
+							isLoading={workspaceUpdate.isUpdating}
+							label="Update and start workspace"
+						>
+							<RotateCcwIcon />
+						</PrimaryAction>
+						<WorkspaceUpdateDialogs {...workspaceUpdate.dialogProps} />
+					</>
+				)}
+
+				{abilities.actions.includes("updateAndStartRequireActiveVersion") && (
+					<>
+						<PrimaryAction
+							onClick={workspaceUpdate.update}
+							isLoading={workspaceUpdate.isUpdating}
+							label="This template requires automatic updates on workspace startup. Contact your administrator if you want to preserve the template version."
+						>
+							<PlayIcon />
+						</PrimaryAction>
+						<WorkspaceUpdateDialogs {...workspaceUpdate.dialogProps} />
+					</>
+				)}
+
+				{abilities.actions.includes("updateAndRestart") && (
+					<>
+						<PrimaryAction
+							onClick={workspaceUpdate.update}
+							isLoading={workspaceUpdate.isUpdating}
+							label="Update and restart workspace"
+						>
+							<RotateCcwIcon />
+						</PrimaryAction>
+						<WorkspaceUpdateDialogs {...workspaceUpdate.dialogProps} />
+					</>
+				)}
+
+				{abilities.actions.includes("updateAndRestartRequireActiveVersion") && (
+					<>
+						<PrimaryAction
+							onClick={workspaceUpdate.update}
+							isLoading={workspaceUpdate.isUpdating}
+							label="This template requires automatic updates on workspace restart. Contact your administrator if you want to preserve the template version."
+						>
+							<PlayIcon />
+						</PrimaryAction>
+						<WorkspaceUpdateDialogs {...workspaceUpdate.dialogProps} />
+					</>
+				)}
+
+				{abilities.canCancel && (
+					<PrimaryAction
+						onClick={() => setIsCancelConfirmOpen(true)}
+						isLoading={cancelBuildMutation.isPending}
+						label="Cancel build"
+					>
+						<BanIcon />
+					</PrimaryAction>
+				)}
+
+				{abilities.actions.includes("retry") && (
+					<PrimaryAction
+						onClick={retry}
+						isLoading={isRetrying}
+						label="Retry build"
+					>
+						<RefreshCcwIcon />
+					</PrimaryAction>
+				)}
+
+				<WorkspaceMoreActions
+					workspace={workspace}
+					disabled={!abilities.canAcceptJobs}
+					onStop={
+						abilities.actions.includes("stop")
+							? () => setIsStopConfirmOpen(true)
+							: undefined
+					}
+					isStopping={stopWorkspaceMutation.isPending}
+					onRestart={
+						abilities.actions.includes("restart")
+							? () => setIsRestartConfirmOpen(true)
+							: undefined
+					}
+					isRestarting={restartWorkspaceMutation.isPending}
+					onActionSuccess={onActionSuccess}
+				/>
+			</div>
+			{/* Stop workspace confirmation dialog */}
+			<ConfirmDialog
+				open={isStopConfirmOpen}
+				title="Stop workspace"
+				description={`Are you sure you want to stop the workspace "${workspace.name}"? This will terminate all running processes and disconnect any active sessions.`}
+				confirmText="Stop"
+				onClose={() => setIsStopConfirmOpen(false)}
+				onConfirm={() => {
+					stopWorkspaceMutation.mutate({});
+					setIsStopConfirmOpen(false);
+				}}
+				type="delete"
+			/>
+
+			{/* Restart workspace confirmation dialog */}
+			<ConfirmDialog
+				open={isRestartConfirmOpen}
+				title="Restart workspace"
+				description={`Are you sure you want to restart the workspace "${workspace.name}"? This will stop all running processes and delete non-persistent data.`}
+				confirmText="Restart"
+				onClose={() => setIsRestartConfirmOpen(false)}
+				onConfirm={() => {
+					restartWorkspaceMutation.mutate({ workspace });
+					setIsRestartConfirmOpen(false);
+				}}
+				type="info"
+			/>
+
+			<WorkspaceBuildCancelDialog
+				open={isCancelConfirmOpen}
+				onClose={() => setIsCancelConfirmOpen(false)}
+				onConfirm={() => {
+					cancelBuildMutation.mutate();
+					setIsCancelConfirmOpen(false);
+				}}
+				workspace={workspace}
+			/>
+		</TableCell>
+	);
+};
+
+type PrimaryActionProps = React.PropsWithChildren<{
+	label: string;
+	isLoading?: boolean;
+	onClick: () => void;
+}>;
+
+const PrimaryAction: React.FC<PrimaryActionProps> = ({
+	onClick,
+	isLoading,
+	label,
+	children,
+}) => {
+	return (
+		<TooltipProvider>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="outline"
+						size="icon-lg"
+						onClick={onClick}
+						disabled={isLoading}
+					>
+						<Spinner loading={isLoading}>{children}</Spinner>
+						<span className="sr-only">{label}</span>
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent>{label}</TooltipContent>
+			</Tooltip>
+		</TooltipProvider>
+	);
+};
+
+// The total number of apps that can be displayed in the workspace row
+const WORKSPACE_APPS_SLOTS = 4;
+
+type WorkspaceAppsProps = {
+	workspace: Workspace;
+};
+
+const WorkspaceApps: React.FC<WorkspaceAppsProps> = ({ workspace }) => {
+	/**
+	 * Coder is pretty flexible and allows an enormous variety of use cases, such
+	 * as having multiple resources with many agents, but they are not common. The
+	 * most common scenario is to have one single compute resource with one single
+	 * agent containing all the apps. We get the apps from the first compute
+	 * resource (they are sorted to return the compute resource first).
+	 *
+	 * For multi-agent workspaces with sub-agents we show the apps from the parent
+	 * agent (the one without a `parent_id`). Sub-agents, such as those created by
+	 * devcontainers, are skipped so agent ordering does not determine which apps
+	 * appear.
+	 *
+	 * When a workspace has multiple parent-level agents we show the apps from the
+	 * first one only; aggregating apps across agents is tracked separately.
+	 */
+	const agent = workspace.latest_build.resources
+		.filter((r) => !r.hide)
+		.at(0)
+		?.agents?.find((a) => a.parent_id === null);
+	if (!agent) {
+		return null;
+	}
+
+	const builtinApps = new Set(agent.display_apps);
+	builtinApps.delete("port_forwarding_helper");
+	builtinApps.delete("ssh_helper");
+
+	const remainingSlots = WORKSPACE_APPS_SLOTS - builtinApps.size;
+	const userApps = agent.apps
+		.filter(
+			(app) =>
+				(app.health === "healthy" || app.health === "disabled") && !app.hidden,
+		)
+		.slice(0, remainingSlots);
+
+	const buttons: React.ReactNode[] = [];
+
+	for (const app of userApps) {
+		buttons.push(
+			<IconAppLink
+				key={app.id}
+				app={app}
+				workspace={workspace}
+				agent={agent}
+			/>,
+		);
+	}
+
+	if (builtinApps.has("web_terminal")) {
+		const href = getTerminalHref({
+			username: workspace.owner_name,
+			workspace: workspace.name,
+			agent: agent.name,
+		});
+		buttons.push(
+			<BaseIconLink
+				key="terminal"
+				href={href}
+				onClick={(e) => {
+					e.preventDefault();
+					openAppInNewWindow(href);
+				}}
+				label="Open Terminal"
+			>
+				<SquareTerminalIcon className="size-7!" />
+			</BaseIconLink>,
+		);
+	}
+
+	buttons.push();
+
+	return buttons;
+};
+
+type WorkspaceAppStatusLinksProps = {
+	workspace: Workspace;
+};
+
+const WorkspaceAppStatusLinks: React.FC<WorkspaceAppStatusLinksProps> = ({
+	workspace,
+}) => {
+	const status = workspace.latest_app_status;
+	const appWithAgent = status
+		? findWorkspaceAppWithAgent(workspace, status.agent_id, status.app_id)
+		: undefined;
+
+	return (
+		<>
+			{appWithAgent && (
+				<IconAppLink
+					app={appWithAgent}
+					workspace={workspace}
+					agent={appWithAgent.agent}
+				/>
+			)}
+
+			{status?.uri && status?.uri !== "n/a" && (
+				<BaseIconLink label={status.uri} href={status.uri} target="_blank">
+					{status.uri.startsWith("file://") ? (
+						<FileIcon />
+					) : (
+						<ExternalLinkIcon />
+					)}
+				</BaseIconLink>
+			)}
+		</>
+	);
+};
+
+type IconAppLinkProps = {
+	app: WorkspaceApp;
+	workspace: Workspace;
+	agent: WorkspaceAgent;
+};
+
+const IconAppLink: React.FC<IconAppLinkProps> = ({ app, workspace, agent }) => {
+	const link = useAppLink(app, {
+		workspace,
+		agent,
+	});
+
+	// A malformed external app URL can't be opened. Render a non-navigating
+	// icon with an explanatory tooltip instead of a broken link.
+	if (!isAppUrlValid(app)) {
+		return (
+			<BaseIconLink
+				key={app.id}
+				label={`${link.label} has an invalid URL`}
+				onClick={() => {}}
+			>
+				{app.icon ? (
+					<ExternalImage src={app.icon} />
+				) : (
+					<CircleAlertIcon
+						aria-hidden="true"
+						className="size-icon-sm text-content-warning"
+					/>
+				)}
+			</BaseIconLink>
+		);
+	}
+
+	return (
+		<BaseIconLink
+			key={app.id}
+			label={`Open ${link.label}`}
+			href={link.href}
+			onClick={link.onClick}
+		>
+			<ExternalImage src={app.icon ?? "/icon/widgets.svg"} />
+		</BaseIconLink>
+	);
+};
+
+type BaseIconLinkCommonProps = React.PropsWithChildren<{
+	label: string;
+	isLoading?: boolean;
+}>;
+
+type BaseIconLinkAnchorProps = BaseIconLinkCommonProps & {
+	href: string;
+	onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+	target?: string;
+};
+
+type BaseIconLinkButtonProps = BaseIconLinkCommonProps & {
+	href?: never;
+	onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+};
+
+type BaseIconLinkProps = BaseIconLinkAnchorProps | BaseIconLinkButtonProps;
+
+const BaseIconLink: React.FC<BaseIconLinkProps> = ({
+	isLoading,
+	label,
+	children,
+	...rest
+}) => {
+	const loadingClass = isLoading ? "animate-pulse" : "";
+
+	return (
+		<TooltipProvider>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					{rest.href !== undefined ? (
+						<Button
+							variant="outline"
+							size="icon-lg"
+							asChild
+							disabled={isLoading}
+						>
+							<a
+								target={rest.target}
+								className={loadingClass}
+								href={rest.href}
+								onClick={(e) => {
+									e.stopPropagation();
+									rest.onClick?.(e);
+								}}
+							>
+								{children}
+								<span className="sr-only">{label}</span>
+							</a>
+						</Button>
+					) : (
+						<Button
+							variant="outline"
+							size="icon-lg"
+							className={loadingClass}
+							onClick={(e) => {
+								e.stopPropagation();
+								rest.onClick(e);
+							}}
+							disabled={isLoading}
+						>
+							{children}
+							<span className="sr-only">{label}</span>
+						</Button>
+					)}
+				</TooltipTrigger>
+				<TooltipContent>{label}</TooltipContent>
+			</Tooltip>
+		</TooltipProvider>
+	);
+};

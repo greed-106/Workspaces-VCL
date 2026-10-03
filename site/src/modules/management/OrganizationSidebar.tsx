@@ -1,0 +1,24 @@
+import { Sidebar as BaseSidebar } from "#/components/Sidebar/Sidebar";
+import { useAuthenticated } from "#/hooks/useAuthenticated";
+import { useOrganizationSettings } from "#/modules/management/OrganizationSettingsLayout";
+import { OrganizationSidebarView } from "./OrganizationSidebarView";
+
+/**
+ * Sidebar for the OrganizationSettingsLayout
+ */
+export const OrganizationSidebar: React.FC = () => {
+	const { permissions } = useAuthenticated();
+	const { organizations, organization, organizationPermissions } =
+		useOrganizationSettings();
+
+	return (
+		<BaseSidebar>
+			<OrganizationSidebarView
+				activeOrganization={organization}
+				orgPermissions={organizationPermissions}
+				organizations={organizations}
+				permissions={permissions}
+			/>
+		</BaseSidebar>
+	);
+};

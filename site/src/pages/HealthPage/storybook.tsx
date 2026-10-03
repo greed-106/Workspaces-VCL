@@ -1,0 +1,50 @@
+import type { Meta } from "@storybook/react-vite";
+import {
+	type RouteDefinition,
+	reactRouterOutlet,
+	reactRouterParameters,
+} from "storybook-addon-remix-react-router";
+import {
+	HEALTH_QUERY_KEY,
+	HEALTH_QUERY_SETTINGS_KEY,
+} from "#/api/queries/debug";
+import { experimentsKey } from "#/api/queries/experiments";
+import {
+	MockAppearanceConfig,
+	MockBuildInfo,
+	MockEntitlements,
+	MockExperiments,
+	MockHealth,
+	MockHealthSettings,
+	MockUserOwner,
+} from "#/testHelpers/entities";
+import { withDashboardProvider } from "#/testHelpers/storybook";
+import { HealthLayout } from "./HealthLayout";
+
+type MetaOptions = {
+	element: RouteDefinition;
+	path: string;
+	params?: Record<string, string>;
+};
+
+export const generateMeta = ({ element, path, params }: MetaOptions) => {
+	return {
+		component: HealthLayout,
+		parameters: {
+			layout: "fullscreen",
+			reactRouter: reactRouterParameters({
+				location: { pathParams: params },
+				routing: reactRouterOutlet({ path }, element),
+			}),
+			queries: [
+				{ key: HEALTH_QUERY_KEY, data: MockHealth },
+				{ key: HEALTH_QUERY_SETTINGS_KEY, data: MockHealthSettings },
+				{ key: ["buildInfo"], data: MockBuildInfo },
+				{ key: ["entitlements"], data: MockEntitlements },
+				{ key: experimentsKey(MockUserOwner.id), data: MockExperiments },
+				{ key: ["appearance"], data: MockAppearanceConfig },
+			],
+			decorators: [withDashboardProvider],
+		},
+	} satisfies Meta;
+};

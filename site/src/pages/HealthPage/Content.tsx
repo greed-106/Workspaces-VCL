@@ -1,0 +1,280 @@
+import { cn } from "cn";
+import {
+	CircleAlertIcon,
+	CircleCheckIcon,
+	CircleHelpIcon,
+	CircleMinusIcon,
+} from "lucide-react";
+import { cloneElement } from "react";
+import type { HealthCode, HealthSeverity } from "#/api/typesGenerated";
+import { Link } from "#/components/Link/Link";
+import { docs } from "#/utils/docs";
+
+const CONTENT_PADDING = 36;
+
+export const Header: React.FC<React.ComponentProps<"header">> = ({
+	className,
+	style,
+	children,
+	...props
+}) => {
+	return (
+		<header
+			className={cn("flex items-center justify-between", className)}
+			style={{ padding: `36px ${CONTENT_PADDING}px`, ...style }}
+			{...props}
+		>
+			{children}
+		</header>
+	);
+};
+
+export const HeaderTitle: React.FC<React.ComponentProps<"h2">> = ({
+	className,
+	children,
+	...props
+}) => {
+	return (
+		<h2
+			className={cn(
+				"m-0 leading-[1.2] text-xl font-medium flex items-center gap-4",
+				className,
+			)}
+			{...props}
+		>
+			{children}
+		</h2>
+	);
+};
+
+type HealthIconProps = {
+	size: number;
+	severity: HealthSeverity;
+};
+
+export const HealthIcon: React.FC<HealthIconProps> = ({ size, severity }) => {
+	const Icon = severity === "error" ? CircleAlertIcon : CircleCheckIcon;
+
+	return (
+		<Icon
+			className={cn(
+				severity === "ok" && "text-content-success",
+				severity === "warning" && "text-content-warning",
+				severity === "error" && "text-content-destructive",
+			)}
+			style={{ width: size, height: size }}
+		/>
+	);
+};
+
+type HealthyDotProps = {
+	severity: HealthSeverity;
+};
+
+export const HealthyDot: React.FC<HealthyDotProps> = ({ severity }) => {
+	return (
+		<div
+			className={cn(
+				"size-2 rounded-full",
+				severity === "ok" && "bg-content-success",
+				severity === "warning" && "bg-content-warning",
+				severity === "error" && "bg-content-destructive",
+			)}
+		/>
+	);
+};
+
+export const Main: React.FC<React.ComponentProps<"div">> = ({
+	className,
+	style,
+	children,
+	...props
+}) => {
+	return (
+		<div
+			className={cn("flex flex-col gap-9", className)}
+			style={{
+				padding: `0 ${CONTENT_PADDING}px ${CONTENT_PADDING}px`,
+				...style,
+			}}
+			{...props}
+		>
+			{children}
+		</div>
+	);
+};
+
+export const GridData: React.FC<React.ComponentProps<"div">> = ({
+	className,
+	children,
+	...props
+}) => {
+	return (
+		<div
+			className={cn(
+				"leading-[1.4] w-min whitespace-nowrap",
+				"grid grid-cols-[auto_auto] gap-3 gap-x-12",
+				className,
+			)}
+			{...props}
+		>
+			{children}
+		</div>
+	);
+};
+
+export const GridDataLabel: React.FC<React.ComponentProps<"span">> = ({
+	className,
+	children,
+	...props
+}) => {
+	return (
+		<span
+			className={cn("text-sm font-medium text-content-secondary", className)}
+			{...props}
+		>
+			{children}
+		</span>
+	);
+};
+
+export const GridDataValue: React.FC<React.ComponentProps<"span">> = ({
+	className,
+	children,
+	...props
+}) => {
+	return (
+		<span className={cn("text-sm text-content-primary", className)} {...props}>
+			{children}
+		</span>
+	);
+};
+
+export const SectionLabel: React.FC<React.ComponentProps<"h4">> = ({
+	className,
+	children,
+	...props
+}) => {
+	return (
+		<h4
+			className={cn("text-sm font-medium m-0 leading-[1.2] mb-4", className)}
+			{...props}
+		>
+			{children}
+		</h4>
+	);
+};
+
+type PillProps = React.ComponentProps<"div"> & {
+	// oxlint-disable-next-line no-restricted-types
+	icon: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
+};
+
+export const Pill: React.FC<PillProps> = ({
+	className,
+	icon,
+	children,
+	...divProps
+}) => {
+	return (
+		<div
+			className={cn(
+				"inline-flex items-center h-8 rounded-full border border-solid border-border text-xs font-medium p-2 gap-2 cursor-default",
+				className,
+			)}
+			{...divProps}
+		>
+			{cloneElement(icon, { className: "size-[14px]" })}
+			{children}
+		</div>
+	);
+};
+
+type StatusIconProps = {
+	value: boolean | null;
+};
+
+export const StatusIcon: React.FC<StatusIconProps> = ({ value }) => {
+	if (value === null) {
+		return <CircleHelpIcon className="size-icon-sm text-content-disabled" />;
+	}
+	return value ? (
+		<CircleCheckIcon className="size-icon-sm text-content-success" />
+	) : (
+		<CircleMinusIcon className="size-icon-sm text-content-destructive" />
+	);
+};
+
+type BooleanPillProps = Omit<
+	React.ComponentProps<typeof Pill>,
+	"icon" | "value"
+> & {
+	value: boolean | null;
+};
+
+export const BooleanPill: React.FC<BooleanPillProps> = ({
+	value,
+	children,
+	...divProps
+}) => {
+	return (
+		<Pill
+			icon={
+				value ? (
+					<CircleCheckIcon className="size-icon-sm text-content-success" />
+				) : (
+					<CircleMinusIcon className="size-icon-sm text-content-destructive" />
+				)
+			}
+			{...divProps}
+		>
+			{children}
+		</Pill>
+	);
+};
+
+type LogsProps = React.ComponentProps<"div"> & { lines: readonly string[] };
+
+export const Logs: React.FC<LogsProps> = ({
+	className,
+	lines,
+	...divProps
+}) => {
+	return (
+		<div
+			className={cn(
+				"font-mono text-sm font-normal leading-relaxed p-6 bg-surface-secondary overflow-x-auto whitespace-pre-wrap break-all",
+				className,
+			)}
+			{...divProps}
+		>
+			{lines.map((line, index) => (
+				<span className="block" key={index}>
+					{line}
+				</span>
+			))}
+			{lines.length === 0 && (
+				<span className="text-content-secondary">No logs available</span>
+			)}
+		</div>
+	);
+};
+
+type HealthMessageDocsLinkProps = {
+	code: HealthCode;
+};
+
+export const HealthMessageDocsLink: React.FC<HealthMessageDocsLinkProps> = ({
+	code,
+}) => {
+	return (
+		<Link
+			href={docs(`/admin/monitoring/health-check#${code.toLocaleLowerCase()}`)}
+			target="_blank"
+			rel="noreferrer"
+			className="mx-0"
+		>
+			Docs for {code}
+		</Link>
+	);
+};

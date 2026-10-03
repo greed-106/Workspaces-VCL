@@ -1,0 +1,66 @@
+import { KeyIcon } from "lucide-react";
+import { useId } from "react";
+import type { AuthMethods } from "#/api/typesGenerated";
+import { Button } from "#/components/Button/Button";
+import { ExternalImage } from "#/components/ExternalImage/ExternalImage";
+
+type OAuthSignInFormProps = {
+	isSigningIn: boolean;
+	redirectTo: string;
+	authMethods?: AuthMethods;
+};
+
+export const OAuthSignInForm: React.FC<OAuthSignInFormProps> = ({
+	isSigningIn,
+	redirectTo,
+	authMethods,
+}) => {
+	return (
+		<div className="grid gap-4">
+			{authMethods?.oidc.enabled && (
+				<Button
+					variant="outline"
+					asChild
+					className="w-full"
+					size="lg"
+					disabled={isSigningIn}
+					type="submit"
+				>
+					<a
+						href={`/api/v2/users/oidc/callback?redirect=${encodeURIComponent(
+							redirectTo,
+						)}`}
+					>
+						{authMethods.oidc.iconUrl ? (
+							<OidcIcon iconUrl={authMethods.oidc.iconUrl} />
+						) : (
+							<KeyIcon />
+						)}
+						{authMethods.oidc.signInText || "OpenID Connect"}
+					</a>
+				</Button>
+			)}
+		</div>
+	);
+};
+
+type OidcIconProps = {
+	iconUrl: string;
+};
+
+const OidcIcon: React.FC<OidcIconProps> = ({ iconUrl }) => {
+	const hookId = useId();
+	const oidcId = `${hookId}-oidc`;
+
+	// Even if the URL is defined, there is a chance that the request for the
+	// image fails. Have to use blank alt text to avoid button from getting ugly
+	// if that happens, but also still need a way to inject accessible text
+	return (
+		<>
+			<ExternalImage alt="" src={iconUrl} aria-labelledby={oidcId} />
+			<div id={oidcId} className="sr-only">
+				Open ID Connect
+			</div>
+		</>
+	);
+};

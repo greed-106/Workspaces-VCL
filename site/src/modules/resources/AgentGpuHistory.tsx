@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useQuery } from "react-query";
 import {
 	Bar,
@@ -43,6 +43,7 @@ type AgentGpuHistoryProps = {
 export const AgentGpuHistory: React.FC<AgentGpuHistoryProps> = ({
 	workspaceId,
 }) => {
+	const hatchId = `gpu-mem-hatch-${useId().replace(/:/g, "")}`;
 	const [selectedGpu, setSelectedGpu] = useState<string>();
 	const [unit, setUnit] = useState<RangeUnit>("hours");
 	const [hours, setHours] = useState(8);
@@ -144,6 +145,28 @@ export const AgentGpuHistory: React.FC<AgentGpuHistoryProps> = ({
 				</Select>
 			</header>
 
+			{/* 斜线填充图案:显存柱用它填充,黑实线留给利用率曲线。 */}
+			<svg aria-hidden width="0" height="0" className="absolute">
+				<defs>
+					<pattern
+						id={hatchId}
+						width="6"
+						height="6"
+						patternUnits="userSpaceOnUse"
+						patternTransform="rotate(45)"
+					>
+						<line
+							x1="0"
+							y1="0"
+							x2="0"
+							y2="6"
+							stroke="hsl(var(--content-secondary))"
+							strokeWidth="1.5"
+						/>
+					</pattern>
+				</defs>
+			</svg>
+
 			<div className="px-4 py-4">
 				{seriesQuery.isLoading ? (
 					<Skeleton width="100%" height={220} className="rounded" />
@@ -214,9 +237,10 @@ export const AgentGpuHistory: React.FC<AgentGpuHistoryProps> = ({
 								<Bar
 									yAxisId="mem"
 									dataKey="mem_gib"
-									fill="hsl(var(--highlight-sky))"
-									fillOpacity={0.35}
-									maxBarSize={12}
+									fill={`url(#${hatchId})`}
+									stroke="hsl(var(--content-secondary))"
+									strokeWidth={1}
+									maxBarSize={14}
 									isAnimationActive
 									animationDuration={700}
 									animationEasing="ease-out"
@@ -225,7 +249,7 @@ export const AgentGpuHistory: React.FC<AgentGpuHistoryProps> = ({
 									yAxisId="util"
 									dataKey="util_pct"
 									type="monotone"
-									stroke="hsl(var(--highlight-purple))"
+									stroke="hsl(var(--content-primary))"
 									strokeWidth={2}
 									dot={false}
 									isAnimationActive

@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 User=__CODER_USER__
 ExecStart=/usr/local/bin/cluster-capacity \
-    -addr __CAPACITY_ADDR__ \
+    -addr __CAPACITY_BIND__ \
     -namespace __NAMESPACE__ \
     -kubeconfig __KUBECONFIG__ \
     -cpu-total __CPU_TOTAL__ -cpu-overcommit __CPU_OVERCOMMIT__ -cpu-reserved __CPU_RESERVED__ \

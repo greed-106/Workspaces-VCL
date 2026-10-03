@@ -48,10 +48,12 @@ sudo deploy/install.sh --render-only            # 只渲染,不改系统文件
 ## 二、项目概览与架构
 
 ```text
-浏览器 http://<节点 IP>:3001
+浏览器 http://<域名>/(80,nginx 反向代理)
    |
-   |  Coder 控制面 coderd(:3001,API + Web UI + 工作区代理),内嵌 PostgreSQL,指标 :2114
+   |  nginx:按域名分流,WebSocket 与流式传输直通,详见 14.7
    v
+Coder 控制面 coderd(127.0.0.1:3001,API + Web UI + 工作区代理),内嵌 PostgreSQL,指标 :2114
+   |
 工作区 Pod,命名空间 coder-workspaces
    |  Deployment,镜像内置 code-server(浏览器版 VS Code,Pod 内 127.0.0.1:13337)
    |  工作区 PVC(local-path,数据落 /mnt/ssd-data/local-path)
@@ -71,7 +73,7 @@ sudo deploy/install.sh --render-only            # 只渲染,不改系统文件
 - 每个工作区一个 PVC(`coder-<工作区 id>-home`),用 `subPath` 挂到 `/home/coder`、`/usr`、`/etc`、`/opt`、`/var/lib`、`/var/cache`,首次启动由 initContainer 把镜像内容拷进空卷。
 - HDD 冷数据卷在工作区之外创建(PV 与 PVC),删掉工作区不影响卷里的数据,可反复挂到不同工作区。
 
-端口:3001 控制面(API、Web UI、工作区入口),2114 指标,3999 容量服务与 HDD 卷页面,6443 kube-apiserver,13337 工作区内的 code-server(仅监听 Pod 内 127.0.0.1,经 Coder 隧道访问)。7080 与 3010 属于 `scripts/develop.sh` 的开发模式(前端 dev server 与工作区代理),日常工作不用;3000 是本机被其它服务占用的端口,控制面不使用。
+端口:80 对外入口(nginx,按域名转发到控制面),3999 对外入口(nginx,转发到容量与数据卷服务);控制面本机监听 127.0.0.1:3001,容量服务本机监听 127.0.0.1:3998,2114 指标,6443 kube-apiserver,13337 工作区内的 code-server(仅监听 Pod 内 127.0.0.1,经 Coder 隧道访问)。7080 与 3010 属于 `scripts/develop.sh` 的开发模式(前端 dev server 与工作区代理),日常工作不用;3000 是本机被其它服务占用的端口,控制面不使用。
 
 ## 三、硬件与软件前提
 
@@ -836,6 +838,44 @@ df -h / /mnt/ssd-data /mnt/hdd-data                                # 7 根分区
 ```
 
 工作区若仍显示旧状态,`kubectl -n coder-workspaces get pods` 里残留的 Pod 可以手工删掉,Coder 会在下次启动时重建。
+
+### 14.7 反向代理(nginx)
+
+对外入口是宿主机上的 nginx(发行版包,`systemd` 托管),按域名把请求分流到两个后端:
+
+| 对外 | 后端 | 说明 |
+| --- | --- | --- |
+| `http://<域名>/`(80) | `127.0.0.1:3001` | 控制面:Web UI、API、工作区代理(Web 端 VS Code、终端、端口转发) |
+| `http://<域名>:3999/` | `127.0.0.1:3998` | 容量与数据卷服务:实时余量、卷管理、分片上传 |
+
+选择宿主机二进制而不是容器的原因:入口代理依赖最少(不需要容器运行时即可启动),由 `systemd` 直接托管与随机器启动,升级走发行版包管理,日志与轮转沿用系统配置;容器方案多一层运行时依赖,对纯转发没有收益。
+
+配置放在 `deploy/nginx/workspaces.conf`,由 `deploy/install.sh` 渲染(占位符取自 `deploy/local.env` 的 `DOMAIN`、`HTTP_PORT`、`CAPACITY_PORT`、`HTTP_ADDR`、`CAPACITY_BIND`)并安装到 `/etc/nginx/conf.d/`,同时停用发行版自带的默认站点,避免抢占 80 端口。改域名或端口只需改 `local.env` 后重新执行 `sudo deploy/install.sh`。
+
+代理参数针对本平台的流量特征设置,逐项原因如下:
+
+| 配置 | 作用 |
+| --- | --- |
+| `proxy_http_version 1.1` + `Upgrade`/`Connection` 映射 | 让终端、Web 端 VS Code、端口转发这类 WebSocket 隧道正常建立 |
+| `proxy_request_buffering off`、`client_max_body_size 0`、`client_body_timeout 3600s` | 上传直接透传、不落临时文件、不限体积,并在偏慢的网络下也不会被 60 秒默认超时打断 |
+| `proxy_buffering off`、`proxy_max_temp_file_size 0` | 日志、文件下载等流式响应即时下发,不写磁盘缓冲 |
+| `proxy_read_timeout` / `proxy_send_timeout` / `send_timeout 3600s` | 长连接隧道不会被中途断开 |
+| `proxy_socket_keepalive on` 与 `upstream ... keepalive` | 与后端保持长连接,减少握手开销 |
+| `tcp_nodelay on` | 交互式终端与隧道的小包立即发送,降低延迟 |
+
+验收方式(部署后建议各做一次):
+
+```bash
+# 控制面与容量服务都能通过域名访问
+curl -s -o /dev/null -w '%{http_code}\n' http://<域名>/healthz
+curl -s http://<域名>:3999/capacity | head -c 120
+
+# WebSocket 隧道:在工作区页面打开 Terminal 或 Web 端 VS Code,能正常输入输出
+
+# 大文件:分片上传一个 GB 级文件,校验服务端偏移与文件哈希(见 11.1 的上传接口)
+```
+
+HTTPS 尚未启用:域名解析到内网地址,无法用 Let's Encrypt 的 HTTP 校验签发证书。后续如需 HTTPS,可在 nginx 上加 443 监听,证书用内部 CA 或自签证书,并把 `local.env` 的 `ACCESS_URL` 改为 `https://<域名>` 后重新执行 `install.sh`。
 
 ## 十五、附录
 

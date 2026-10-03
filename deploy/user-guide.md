@@ -7,7 +7,7 @@
 ## 一、账号申请与初始设置
 
 1. 向管理员申请账号,需要提供两项信息:常用邮箱(用于登录)和姓名。
-2. 管理员创建账号后,会提供控制台地址和初始密码。
+2. 管理员创建账号后,会提供控制台地址(形如 `http://workspace.mingjia.tech`)和初始密码。
 3. 打开控制台地址,使用邮箱与初始密码登录。
 4. 首次登录后请修改初始密码:右上角头像 → **Settings** → **Security** → **Password**,依次填写 Old Password、New Password、Confirm Password 后保存。
 

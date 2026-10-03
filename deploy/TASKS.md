@@ -52,6 +52,10 @@
 - 精简后的导航为 Workspaces / Templates / Volumes,管理菜单为 Deployment / Healthcheck;默认主题 light(见 site/src/theme/index.ts 的 DEFAULT_THEME),用户仍可在“外观”里切换。
 - 工作区页面与工作区列表不再显示桌面版 VS Code 入口(site/src/modules/workspaces/DynamicParameter/parameterUiHints.ts 的 hiddenDisplayApps 隐藏 vscode 与 vscode_insiders)。
 
+- 对外入口由宿主机 nginx 承担(`deploy/nginx/workspaces.conf` 模板 + `deploy/install.sh` 安装):80 端口转发到控制面(127.0.0.1:3001),3999 端口转发到容量与数据卷服务(127.0.0.1:3998);两个服务都只监听回环,不再直接对外。域名 `workspace.mingjia.tech` 解析到本机内网地址,暂用 HTTP。
+- 代理参数按平台流量特征设置:WebSocket 隧道(终端、Web 端 VS Code、端口转发)直通,上传不做请求体缓冲、不限体积、超时放宽到 1 小时,响应不做磁盘缓冲,后端保持长连接。实测 512MiB 与 2GiB 分片上传通过校验(哈希一致),终端隧道内执行命令可正常回显。
+- 原先占用 80 端口的 Nextcloud(snap 安装且无用户数据)已移除,移除时 snapd 自动保存了数据快照。
+
 ## 二、产品与架构决策
 
 - 一个 HDD 数据卷允许同时挂载到多个工作区:读写冲突由用户自行保证,不做互斥拦截;页面上的“使用中”只是提示信息。

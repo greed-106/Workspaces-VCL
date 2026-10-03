@@ -100,7 +100,7 @@ const DashboardPage: React.FC = () => {
 						<Table aria-label="正在运行的实例">
 							<TableHeader>
 								<TableRow>
-									<TableHead className="pl-5">用户 / 实例</TableHead>
+									<TableHead className="pl-5">实例 / 属主</TableHead>
 									<TableHead>状态</TableHead>
 									<TableHead>配置</TableHead>
 									<TableHead>当前用量</TableHead>
@@ -118,7 +118,7 @@ const DashboardPage: React.FC = () => {
 													{instance.workspace_name}
 												</span>
 												<span className="text-xs text-content-secondary">
-													{instance.username}
+													属主 {instance.username}
 												</span>
 											</div>
 										</TableCell>
@@ -175,8 +175,8 @@ const DashboardPage: React.FC = () => {
 				<DialogContent className="max-w-4xl">
 					<DialogHeader>
 						<DialogTitle>
-							{gpuHistoryFor?.username}/{gpuHistoryFor?.workspace_name} 的 GPU
-							历史
+							实例 {gpuHistoryFor?.workspace_name}(属主{" "}
+							{gpuHistoryFor?.username})的 GPU 历史
 						</DialogTitle>
 					</DialogHeader>
 					{gpuHistoryFor && (

@@ -937,7 +937,7 @@ curl -s http://workspace.mingjia.tech/gpu-api/healthz
 
 | 列 | 来源 |
 | --- | --- |
-| 用户 / 实例 | Pod 标签 `com.coder.user.username` 与 `com.coder.workspace.name` |
+| 实例 / 属主 | Pod 标签 `com.coder.workspace.name` 与 `com.coder.user.username`:实例名为主行,属主为副行 |
 | 状态 | Pod `status.phase`(只列 Running) |
 | 配置(CPU/内存/GPU/磁盘) | 容器 `dev` 的 limits + 挂到 `/home/coder` 的 PVC 申请容量 |
 | 当前用量(CPU/内存/磁盘) | kubelet Summary API(`/api/v1/nodes/<node>/proxy/stats/summary`,经 k8s API 代理,不需要 metrics-server);磁盘只统计 home 卷 |

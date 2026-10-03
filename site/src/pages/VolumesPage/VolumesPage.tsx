@@ -2,6 +2,12 @@ import { cn } from "cn";
 import { RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "#/components/Button/Button";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "#/components/Tooltip/Tooltip";
 import { useAuthenticated } from "#/hooks/useAuthenticated";
 import { capacityUrl } from "#/modules/clusterCapacity/clusterCapacity";
 import { VolumeUpload } from "./VolumeUpload";
@@ -44,6 +50,42 @@ const errorText = (error: unknown) =>
 
 const formatSize = (gb: number) =>
 	gb >= 1024 ? `${(gb / 1024).toFixed(2)} TB` : `${Math.round(gb)} GB`;
+
+/** PVC 状态的中文说法;悬停里会给出原始值与该状态的含义。 */
+const PHASE_LABELS: Record<string, { label: string; hint: string }> = {
+	Bound: {
+		label: "已绑定",
+		hint: "Bound:已绑定到存储对象,可以挂到工作区使用",
+	},
+	Pending: {
+		label: "待绑定",
+		hint: "Pending:刚创建、还在绑定,通常几秒内完成;若一直停在这里说明存储对象没建成功",
+	},
+	Lost: {
+		label: "已丢失",
+		hint: "Lost:绑定的存储对象被删掉了,数据目录还在但卷不可用,需要管理员重建存储对象",
+	},
+	Terminating: {
+		label: "删除中",
+		hint: "Terminating:正在删除,稍后会从列表消失",
+	},
+};
+
+const PhaseLabel: React.FC<{ phase: string }> = ({ phase }) => {
+	const info = PHASE_LABELS[phase];
+	return (
+		<TooltipProvider delayDuration={200}>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<span className="cursor-help">{info?.label ?? phase}</span>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					{info?.hint ?? `k8s 状态:${phase}`}
+				</TooltipContent>
+			</Tooltip>
+		</TooltipProvider>
+	);
+};
 
 const formatUsed = (gb: number | null) => {
 	if (gb === null) {
@@ -390,7 +432,19 @@ const VolumesPage: React.FC = () => {
 									<th className="py-2 pr-4 font-medium">容量</th>
 									<th className="py-2 pr-4 font-medium">实际使用</th>
 									<th className="py-2 pr-4 font-medium">使用率</th>
-									<th className="py-2 pr-4 font-medium">状态</th>
+									<th className="py-2 pr-4 font-medium">
+										<TooltipProvider delayDuration={200}>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<span className="cursor-help">状态</span>
+												</TooltipTrigger>
+												<TooltipContent side="bottom" className="max-w-80">
+													存储卷声明的绑定状态:已绑定 = 可用;待绑定 =
+													还在绑定(几秒); 已丢失 = 存储对象被删、需要管理员处理
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									</th>
 									<th className="py-2 pr-4 font-medium">使用中</th>
 									<th className="py-2 font-medium" />
 								</tr>
@@ -412,7 +466,9 @@ const VolumesPage: React.FC = () => {
 												total={volume.limit_gb || volume.size_gb}
 											/>
 										</td>
-										<td className="py-2 pr-4">{volume.phase}</td>
+										<td className="py-2 pr-4">
+											<PhaseLabel phase={volume.phase} />
+										</td>
 										<td className="py-2 pr-4">
 											{(volume.in_use_by ?? []).length > 0
 												? volume.in_use_by?.join(", ")
@@ -446,12 +502,24 @@ const VolumesPage: React.FC = () => {
 						<table className="w-full border-collapse text-sm">
 							<thead>
 								<tr className="text-left text-content-secondary">
-									<th className="py-2 pr-4 font-medium">属主</th>
+									<th className="py-2 pr-4 font-medium">用户</th>
 									<th className="py-2 pr-4 font-medium">卷名</th>
 									<th className="py-2 pr-4 font-medium">申请大小</th>
 									<th className="py-2 pr-4 font-medium">实际使用</th>
 									<th className="py-2 pr-4 font-medium">使用率</th>
-									<th className="py-2 pr-4 font-medium">状态</th>
+									<th className="py-2 pr-4 font-medium">
+										<TooltipProvider delayDuration={200}>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<span className="cursor-help">状态</span>
+												</TooltipTrigger>
+												<TooltipContent side="bottom" className="max-w-80">
+													存储卷声明的绑定状态:已绑定 = 可用;待绑定 =
+													还在绑定(几秒); 已丢失 = 存储对象被删、需要管理员处理
+												</TooltipContent>
+											</Tooltip>
+										</TooltipProvider>
+									</th>
 									<th className="py-2 font-medium">使用中</th>
 								</tr>
 							</thead>
@@ -473,7 +541,9 @@ const VolumesPage: React.FC = () => {
 												total={volume.limit_gb || volume.size_gb}
 											/>
 										</td>
-										<td className="py-2 pr-4">{volume.phase}</td>
+										<td className="py-2 pr-4">
+											<PhaseLabel phase={volume.phase} />
+										</td>
 										<td className="py-2">
 											{(volume.in_use_by ?? []).length > 0
 												? volume.in_use_by?.join(", ")

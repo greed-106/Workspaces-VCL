@@ -23,6 +23,7 @@ import (
 	"syscall"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -250,7 +251,10 @@ func (s *server) deleteVolume(ctx context.Context, pvcName string, purge bool) e
 		return fmt.Errorf("卷正被工作区使用中(%s),请先停止该工作区", strings.Join(vol.InUseBy, ", "))
 	}
 	_ = cleanupUploads(vol.Path) // 卷里的临时分片一并清掉
-	_ = s.client.CoreV1().PersistentVolumeClaims(s.cfg.namespace).Delete(ctx, pvcName, metav1.DeleteOptions{})
+	// PVC 删除失败不能忽略:留给集群会变成 Lost 状态(卷看起来还在但已不可用)。
+	if err := s.client.CoreV1().PersistentVolumeClaims(s.cfg.namespace).Delete(ctx, pvcName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("删 PVC 失败: %w", err)
+	}
 	if err := s.client.CoreV1().PersistentVolumes().Delete(ctx, pvcName, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("删 PV 失败: %w", err)
 	}

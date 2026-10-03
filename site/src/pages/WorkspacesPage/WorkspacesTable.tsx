@@ -92,7 +92,6 @@ type WorkspacesTableProps = {
 	canCreateWorkspace: boolean;
 	onActionSuccess: () => Promise<void>;
 	onActionError: (error: unknown) => void;
-	chatsByWorkspace?: Record<string, string>;
 };
 
 export const WorkspacesTable: React.FC<WorkspacesTableProps> = ({

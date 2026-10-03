@@ -567,6 +567,8 @@ cd /data/mingjia/Workspaces-VCL
 
 `gpu_model` 的型号与显存是推送模板那一刻从节点标签读出来的,加卡或换型号后需要重新推送。
 
+`deploy/coder-template-kubernetes/README.md` 是模板自带的介绍:推送后它会显示在 WebUI 的模板页面上,给用户说明这个模板能拿到什么资源、怎么申请、数据卷怎么用。改完这个文件也要重新推送模板才会生效,内容按面向使用者的口径写,不要写内部路径。
+
 ### 9.5 用 API 建工作区
 
 非 TTY 环境下 CLI 会卡在参数交互,用 API 最稳:

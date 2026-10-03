@@ -46,7 +46,6 @@ const meta: Meta<typeof MobileMenu> = {
 			canViewOrganizations: true,
 			canViewAuditLog: true,
 			canViewConnectionLog: true,
-			canViewAIBridge: true,
 			canViewHealth: true,
 		},
 	},

@@ -3,7 +3,6 @@ import { useState } from "react";
 import type { BannerConfig } from "#/api/typesGenerated";
 import { Button } from "#/components/Button/Button";
 import { ConfirmDialog } from "#/components/Dialog/ConfirmDialog/ConfirmDialog";
-import { Link } from "#/components/Link/Link";
 import {
 	SettingsHeader,
 	SettingsHeaderDescription,
@@ -38,7 +37,6 @@ const NewBannerButton: React.FC<NewBannerButtonProps> = ({ onClick }) => (
 );
 
 type AnnouncementBannersettingsProps = {
-	isEntitled: boolean;
 	announcementBanners: readonly BannerConfig[];
 	onSubmit: (banners: readonly BannerConfig[]) => Promise<void>;
 };
@@ -51,7 +49,7 @@ type EditingBanner = {
 
 export const AnnouncementBannerSettings: React.FC<
 	AnnouncementBannersettingsProps
-> = ({ isEntitled, announcementBanners, onSubmit }) => {
+> = ({ announcementBanners, onSubmit }) => {
 	const [banners, setBanners] = useState(announcementBanners);
 	const [editingBanner, setEditingBanner] = useState<EditingBanner | null>(
 		null,
@@ -81,27 +79,13 @@ export const AnnouncementBannerSettings: React.FC<
 		<>
 			<div>
 				<SettingsHeader
-					actions={
-						isEntitled ? (
-							<NewBannerButton onClick={openCreateDialog} />
-						) : undefined
-					}
+					actions={<NewBannerButton onClick={openCreateDialog} />}
 				>
 					<SettingsHeaderTitle hierarchy="secondary" level="h2">
 						Announcement Banners
 					</SettingsHeaderTitle>
 					<SettingsHeaderDescription>
 						Display message banners to all users.
-						{!isEntitled && (
-							<>
-								{" "}
-								Your license does not include Service Banners.{" "}
-								<Link href="mailto:sales@coder.com" showExternalIcon={false}>
-									Contact sales
-								</Link>{" "}
-								to learn more.
-							</>
-						)}
 					</SettingsHeaderDescription>
 				</SettingsHeader>
 
@@ -115,15 +99,11 @@ export const AnnouncementBannerSettings: React.FC<
 						</TableRow>
 					</TableHeader>
 					<TableBody>
-						{!isEntitled || banners.length < 1 ? (
+						{banners.length < 1 ? (
 							<TableEmpty
 								message="No announcement banners"
 								description="Create a banner to display a message to all users."
-								cta={
-									isEntitled ? (
-										<NewBannerButton onClick={openCreateDialog} />
-									) : undefined
-								}
+								cta={<NewBannerButton onClick={openCreateDialog} />}
 							/>
 						) : (
 							banners.map((banner, i) => (

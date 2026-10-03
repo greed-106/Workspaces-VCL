@@ -624,7 +624,6 @@ export const ShowWorkspaceChats: Story = {
 				name: "agent-workspace",
 			},
 		],
-		chatsByWorkspace: { "ws-with-agent": "some-chat-id" },
 	},
 };
 

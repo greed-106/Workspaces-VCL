@@ -2,7 +2,6 @@ import type { AuthMethods } from "#/api/typesGenerated";
 import { Alert } from "#/components/Alert/Alert";
 import { ErrorAlert } from "#/components/Alert/ErrorAlert";
 import { getApplicationName } from "#/utils/appearance";
-import { OAuthSignInForm } from "./OAuthSignInForm";
 import { PasswordSignInForm } from "./PasswordSignInForm";
 
 type SignInFormProps = {
@@ -16,15 +15,11 @@ type SignInFormProps = {
 
 export const SignInForm: React.FC<SignInFormProps> = ({
 	authMethods,
-	redirectTo,
 	isSigningIn,
 	error,
 	message,
 	onSubmit,
 }) => {
-	const oAuthEnabled = Boolean(
-		authMethods?.github.enabled || authMethods?.oidc.enabled,
-	);
 	const passwordEnabled = authMethods?.password.enabled ?? true;
 	const applicationName = getApplicationName();
 
@@ -46,33 +41,15 @@ export const SignInForm: React.FC<SignInFormProps> = ({
 				</div>
 			)}
 
-			{oAuthEnabled && (
-				<OAuthSignInForm
-					isSigningIn={isSigningIn}
-					redirectTo={redirectTo}
-					authMethods={authMethods}
-				/>
-			)}
-
-			{passwordEnabled && oAuthEnabled && (
-				<div className="py-6 flex items-center gap-4">
-					<div className="w-full h-px bg-border" />
-					<div className="shrink-0 text-content-secondary uppercase text-xs tracking-widest">
-						or
-					</div>
-					<div className="w-full h-px bg-border" />
-				</div>
-			)}
-
 			{passwordEnabled && (
 				<PasswordSignInForm
 					onSubmit={onSubmit}
-					autoFocus={!oAuthEnabled}
+					autoFocus
 					isSigningIn={isSigningIn}
 				/>
 			)}
 
-			{!passwordEnabled && !oAuthEnabled && (
+			{!passwordEnabled && (
 				<Alert severity="error" prominent>
 					No authentication methods configured!
 				</Alert>

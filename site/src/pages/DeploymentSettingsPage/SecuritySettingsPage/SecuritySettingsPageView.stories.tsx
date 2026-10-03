@@ -49,8 +49,6 @@ const meta: Meta<typeof SecuritySettingsPageView> = {
 				hidden: false,
 			},
 		],
-		isBrowserOnlyEntitled: true,
-		featureBrowserOnlyEnabled: true,
 	},
 };
 
@@ -79,10 +77,7 @@ export const Page: Story = {
 };
 
 export const EntitledAndTurnedOff: Story = {
-	args: {
-		isBrowserOnlyEntitled: true,
-		featureBrowserOnlyEnabled: false,
-	},
+	args: {},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(
@@ -97,10 +92,7 @@ export const EntitledAndTurnedOff: Story = {
 };
 
 export const NotEntitled: Story = {
-	args: {
-		isBrowserOnlyEntitled: false,
-		featureBrowserOnlyEnabled: false,
-	},
+	args: {},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(

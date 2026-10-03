@@ -168,13 +168,6 @@ const OrganizationSettingsNavigation: React.FC<
 			<SettingsSidebarNavItem end href={urlForSubpage(organization.name)}>
 				Members
 			</SettingsSidebarNavItem>
-			{orgPermissions.viewGroups && (
-				<SettingsSidebarNavItem
-					href={urlForSubpage(organization.name, "groups")}
-				>
-					Groups
-				</SettingsSidebarNavItem>
-			)}
 			{orgPermissions.viewOrgRoles && (
 				<SettingsSidebarNavItem
 					href={urlForSubpage(organization.name, "roles")}

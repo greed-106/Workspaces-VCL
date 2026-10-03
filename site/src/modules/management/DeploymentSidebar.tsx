@@ -7,16 +7,9 @@ import { DeploymentSidebarView } from "./DeploymentSidebarView";
  */
 export const DeploymentSidebar: React.FC = () => {
 	const { permissions } = useAuthenticated();
-	const { entitlements, showOrganizations, buildInfo } = useDashboard();
-	// Trialing deployments keep the Premium tab so they can convert.
-	const hidePremiumTab = entitlements.has_license && !entitlements.trial;
+	const { buildInfo } = useDashboard();
 
 	return (
-		<DeploymentSidebarView
-			permissions={permissions}
-			showOrganizations={showOrganizations}
-			hidePremiumTab={hidePremiumTab}
-			buildInfo={buildInfo}
-		/>
+		<DeploymentSidebarView permissions={permissions} buildInfo={buildInfo} />
 	);
 };

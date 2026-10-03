@@ -42,20 +42,14 @@ const CodernautsSVG = () => (
 type UserDropdownContentProps = {
 	user: TypesGen.User;
 	buildInfo?: TypesGen.BuildInfoResponse;
-	/** Extra content for the profile area, rendered below the profile link
-	 * (e.g. AI spend). The consumer supplies its own separator if needed. */
-	profileExtra?: React.ReactNode;
 	supportLinks: readonly TypesGen.LinkConfig[];
 	codernautsEnabled?: boolean;
 	onSignOut: () => void;
-	/** Premium trial entry, rendered above the build info. */
-	trialCta?: React.ReactNode;
 };
 
 export const UserDropdownContent: React.FC<UserDropdownContentProps> = ({
 	user,
 	buildInfo,
-	profileExtra,
 	codernautsEnabled = true,
 	onSignOut,
 }) => {
@@ -71,7 +65,6 @@ export const UserDropdownContent: React.FC<UserDropdownContentProps> = ({
 					</div>
 				</Link>
 			</DropdownMenuItem>
-			{profileExtra}
 			<DropdownMenuSeparator />
 			<DropdownMenuItem asChild>
 				<Link to="/install">

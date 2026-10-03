@@ -16,7 +16,6 @@ export type AdminSettingsPermissions = {
 	canViewOrganizations?: boolean;
 	canViewAuditLog?: boolean;
 	canViewConnectionLog?: boolean;
-	canViewAIBridge?: boolean;
 	canViewHealth?: boolean;
 };
 
@@ -49,11 +48,6 @@ export const AdminSettingsItems: React.FC<AdminSettingsItemsProps> = ({
 			{permissions.canViewConnectionLog && (
 				<DropdownMenuItem asChild className={itemClassName}>
 					<Link to="/connectionlog">Connection logs</Link>
-				</DropdownMenuItem>
-			)}
-			{permissions.canViewAIBridge && (
-				<DropdownMenuItem asChild className={itemClassName}>
-					<Link to="/ai-gateway/sessions">AI sessions</Link>
 				</DropdownMenuItem>
 			)}
 			{permissions.canViewHealth && (

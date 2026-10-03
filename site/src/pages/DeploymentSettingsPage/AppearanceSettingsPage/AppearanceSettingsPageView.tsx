@@ -17,15 +17,12 @@ import {
 } from "#/components/SettingsHeader/SettingsHeader";
 import { Spinner } from "#/components/Spinner/Spinner";
 import { Switch } from "#/components/Switch/Switch";
-import { PremiumPaywall } from "#/modules/paywall/PremiumPaywall";
 import { docs } from "#/utils/docs";
 import { getFormHelpers } from "#/utils/formUtils";
 import { AnnouncementBannerSettings } from "./AnnouncementBannerSettings";
 
 type AppearanceSettingsPageViewProps = {
 	appearance: UpdateAppearanceConfig;
-	isEntitled: boolean;
-	canViewPremium: boolean;
 	onSaveAppearance: (
 		newConfig: Partial<UpdateAppearanceConfig>,
 	) => Promise<void>;
@@ -33,7 +30,7 @@ type AppearanceSettingsPageViewProps = {
 
 export const AppearanceSettingsPageView: React.FC<
 	AppearanceSettingsPageViewProps
-> = ({ appearance, isEntitled, canViewPremium, onSaveAppearance }) => {
+> = ({ appearance, onSaveAppearance }) => {
 	const form = useFormik<{
 		application_name: string;
 		logo_url: string;
@@ -57,71 +54,55 @@ export const AppearanceSettingsPageView: React.FC<
 				</SettingsHeaderDescription>
 			</SettingsHeader>
 
-			{!isEntitled ? (
-				<PremiumPaywall
-					source="appearance"
-					message="Appearance"
-					description="Configure branding and announcement banners for your deployment."
-					features={[
-						"Custom application name and logo",
-						"Site-wide announcement banners for updates",
-						"Custom branded OIDC sign-in button",
-						"Custom support links in dropdown",
-					]}
-					canViewPremium={canViewPremium}
-				/>
-			) : (
-				<div className="flex flex-col gap-8">
-					<VerticalForm
-						onSubmit={form.handleSubmit}
-						aria-label="Appearance settings"
+			<div className="flex flex-col gap-8">
+				<VerticalForm
+					onSubmit={form.handleSubmit}
+					aria-label="Appearance settings"
+				>
+					<FormSection
+						title="Branding"
+						description="Customize the application name and logo shown on the login page and in the dashboard."
 					>
-						<FormSection
-							title="Branding"
-							description="Customize the application name and logo shown on the login page and in the dashboard."
-						>
-							<FormFields>
-								<FormField
-									field={getFieldHelpers("application_name", {
-										helperText: 'Leave empty to use "Coder".',
-									})}
-									label="Application name"
-									placeholder="Coder"
-									disabled={form.isSubmitting}
-								/>
+						<FormFields>
+							<FormField
+								field={getFieldHelpers("application_name", {
+									helperText: 'Leave empty to use "Coder".',
+								})}
+								label="Application name"
+								placeholder="Coder"
+								disabled={form.isSubmitting}
+							/>
 
-								<IconField
-									{...getFieldHelpers("logo_url", {
-										helperText:
-											"Leave empty to use the Coder logo. An image with transparency and an aspect ratio of 3:1 or less will look best.",
-									})}
-									label="Logo URL"
-									placeholder="/icon/coder.svg"
-									disabled={form.isSubmitting}
-									onPickEmoji={(value) => {
-										void form.setFieldValue("logo_url", value);
-									}}
-								/>
-							</FormFields>
-						</FormSection>
+							<IconField
+								{...getFieldHelpers("logo_url", {
+									helperText:
+										"Leave empty to use the Coder logo. An image with transparency and an aspect ratio of 3:1 or less will look best.",
+								})}
+								label="Logo URL"
+								placeholder="/icon/coder.svg"
+								disabled={form.isSubmitting}
+								onPickEmoji={(value) => {
+									void form.setFieldValue("logo_url", value);
+								}}
+							/>
+						</FormFields>
+					</FormSection>
 
-						<FormFooter>
-							<Button type="submit" disabled={form.isSubmitting}>
-								<Spinner loading={form.isSubmitting} />
-								Save
-							</Button>
-						</FormFooter>
-					</VerticalForm>
+					<FormFooter>
+						<Button type="submit" disabled={form.isSubmitting}>
+							<Spinner loading={form.isSubmitting} />
+							Save
+						</Button>
+					</FormFooter>
+				</VerticalForm>
 
-					<AnnouncementBannerSettings
-						isEntitled
-						announcementBanners={appearance.announcement_banners || []}
-						onSubmit={(announcementBanners) =>
-							onSaveAppearance({ announcement_banners: announcementBanners })
-						}
-					/>
-				</div>
-			)}
+				<AnnouncementBannerSettings
+					announcementBanners={appearance.announcement_banners || []}
+					onSubmit={(announcementBanners) =>
+						onSaveAppearance({ announcement_banners: announcementBanners })
+					}
+				/>
+			</div>
 
 			<div className="overflow-hidden rounded-lg border border-solid border-border">
 				<div className="flex items-center justify-between gap-4 p-6">

@@ -1,6 +1,4 @@
-import { ArrowUpRightIcon } from "lucide-react";
 import type { BuildInfoResponse } from "#/api/typesGenerated";
-import { PREMIUM_PAGE_PATH } from "#/components/Paywall/Paywall";
 import {
 	Sidebar as BaseSidebar,
 	SettingsSidebarNavItem as SidebarNavItem,
@@ -10,8 +8,6 @@ import type { Permissions } from "#/modules/permissions";
 type DeploymentSidebarViewProps = {
 	/** Site-wide permissions. */
 	permissions: Permissions;
-	showOrganizations: boolean;
-	hidePremiumTab: boolean;
 	buildInfo: BuildInfoResponse;
 };
 
@@ -21,8 +17,6 @@ type DeploymentSidebarViewProps = {
  */
 export const DeploymentSidebarView: React.FC<DeploymentSidebarViewProps> = ({
 	permissions,
-	showOrganizations,
-	hidePremiumTab,
 	buildInfo,
 }) => {
 	return (
@@ -34,11 +28,6 @@ export const DeploymentSidebarView: React.FC<DeploymentSidebarViewProps> = ({
 				{permissions.editDeploymentConfig && (
 					<SidebarNavItem href="/deployment/appearance">
 						Appearance
-					</SidebarNavItem>
-				)}
-				{permissions.viewDeploymentConfig && (
-					<SidebarNavItem href="/deployment/userauth">
-						User Authentication
 					</SidebarNavItem>
 				)}
 				{permissions.viewDeploymentConfig && buildInfo.oauth2_provider && (
@@ -66,28 +55,11 @@ export const DeploymentSidebarView: React.FC<DeploymentSidebarViewProps> = ({
 				{permissions.viewAllUsers && (
 					<SidebarNavItem href="/deployment/users">Users</SidebarNavItem>
 				)}
-				{permissions.viewAnyGroup && (
-					<SidebarNavItem href="/deployment/groups">
-						<div className="flex flex-row items-center gap-1">
-							Groups {showOrganizations && <ArrowUpRightIcon size={16} />}
-						</div>
-					</SidebarNavItem>
-				)}
-				{permissions.viewOrganizationIDPSyncSettings && (
-					<SidebarNavItem href="/deployment/idp-org-sync">
-						IdP Organization Sync
-					</SidebarNavItem>
-				)}
 				{permissions.viewNotificationTemplate && (
 					<SidebarNavItem href="/deployment/notifications">
 						<div className="flex flex-row items-center gap-2">
 							<span>Notifications</span>
 						</div>
-					</SidebarNavItem>
-				)}
-				{!hidePremiumTab && (
-					<SidebarNavItem href={PREMIUM_PAGE_PATH}>
-						Trial Upgrade
 					</SidebarNavItem>
 				)}
 			</div>

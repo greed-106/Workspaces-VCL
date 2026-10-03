@@ -71,13 +71,7 @@ export const UserEngagementChart: React.FC<UserEngagementChartProps> = ({
 							<Link size="sm" asChild>
 								<RouterLink to="/audit">Activity Audit</RouterLink>
 							</Link>{" "}
-							and{" "}
-							<Link size="sm" asChild>
-								<RouterLink to="/deployment/licenses">
-									License Consumption
-								</RouterLink>
-							</Link>{" "}
-							tools.
+							and license consumption tools.
 						</p>
 					</CollapsibleContent>
 				</Collapsible>

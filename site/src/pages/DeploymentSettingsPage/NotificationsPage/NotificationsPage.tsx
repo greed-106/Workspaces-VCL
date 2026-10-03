@@ -21,6 +21,7 @@ import {
 import { useAuthenticated } from "#/hooks/useAuthenticated";
 import { useSearchParamsKey } from "#/hooks/useSearchParamsKey";
 import { useDeploymentConfig } from "#/modules/management/DeploymentConfigProvider";
+import { isHiddenNotificationGroup } from "#/modules/notifications/hiddenGroups";
 import { castNotificationMethod } from "#/modules/notifications/utils";
 import { deploymentGroupHasParent } from "#/utils/deployOptions";
 import { docs } from "#/utils/docs";
@@ -69,10 +70,12 @@ const NotificationsPage: React.FC = () => {
 		customTemplatesByGroup.data != null &&
 		dispatchMethods.data != null;
 	// Combine system and custom notification templates
-	const allTemplatesByGroup = {
-		...systemTemplatesByGroup.data,
-		...customTemplatesByGroup.data,
-	};
+	const allTemplatesByGroup = Object.fromEntries(
+		Object.entries({
+			...systemTemplatesByGroup.data,
+			...customTemplatesByGroup.data,
+		}).filter(([group]) => !isHiddenNotificationGroup(group)),
+	);
 	return (
 		<>
 			<title>{pageTitle("Notifications Settings")}</title>

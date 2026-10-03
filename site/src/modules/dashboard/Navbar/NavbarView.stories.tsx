@@ -23,7 +23,6 @@ const meta: Meta<typeof NavbarView> = {
 			canViewOrganizations: true,
 			canViewAuditLog: true,
 			canViewConnectionLog: true,
-			canViewAIBridge: true,
 			canViewHealth: true,
 		},
 		canCreateChat: true,

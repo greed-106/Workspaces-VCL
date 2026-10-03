@@ -24,8 +24,6 @@ export const Navbar: React.FC = () => {
 		featureVisibility.audit_log && permissions.viewAnyAuditLog;
 	const canViewConnectionLog =
 		featureVisibility.connection_log && permissions.viewAnyConnectionLog;
-	const canViewAIBridge =
-		featureVisibility.aibridge && permissions.viewAnyAIBridgeInterception;
 	const canCreateChat = permissions.createChat;
 
 	const uniqueLinks = new Map<string, LinkConfig>();
@@ -46,7 +44,6 @@ export const Navbar: React.FC = () => {
 				canViewOrganizations,
 				canViewAuditLog,
 				canViewConnectionLog,
-				canViewAIBridge,
 				canViewHealth,
 			}}
 			canCreateChat={canCreateChat}

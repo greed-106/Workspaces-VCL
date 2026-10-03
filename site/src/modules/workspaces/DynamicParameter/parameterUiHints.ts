@@ -5,7 +5,7 @@
  * so the hints that shape those forms live here, keyed by parameter name.
  *
  * Keep these in sync with the Kubernetes template in
- * k8s-setup/coder-template-kubernetes/main.tf. Hints only shape the form: the
+ * deploy/coder-template-kubernetes/main.tf. Hints only shape the form: the
  * API still accepts every value, so workspaces can be created through the CLI
  * or API outside these ranges.
  */

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
  * Live cluster capacity, shared by every component that renders it.
  *
  * The data comes from the cluster-capacity service on the Coder host (see
- * k8s-setup/cluster-capacity). Parameter options only carry a snapshot taken
+ * deploy/cluster-capacity). Parameter options only carry a snapshot taken
  * when the template was pushed, so this module is what keeps the forms honest.
  *
  * A single poller runs for the whole page; when the endpoint is unreachable the

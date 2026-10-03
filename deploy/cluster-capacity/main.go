@@ -290,12 +290,26 @@ func main() {
 	flag.StringVar(&cfg.kubeconfig, "kubeconfig", "", "path to kubeconfig (defaults to KUBECONFIG or ~/.kube/config)")
 	flag.StringVar(&cfg.volumeRoot, "volume-root", "/mnt/hdd-data/volumes", "directory holding HDD volume directories")
 	flag.StringVar(&cfg.volumeStorageClass, "volume-storage-class", "coder-hdd", "storage class used for HDD volume PVs")
-	flag.StringVar(&cfg.volumeNode, "volume-node", "ubuntu0002", "node the HDD volumes are pinned to")
+	flag.StringVar(&cfg.volumeNode, "volume-node", "", "node the HDD volumes are pinned to (defaults to the only node in the cluster)")
 	flag.Parse()
 
 	client, err := kubeClient(cfg.kubeconfig)
 	if err != nil {
 		log.Fatalf("cluster-capacity: %v", err)
+	}
+	// 卷的 PV 用 nodeAffinity 绑到具体节点;单节点集群可以直接探测,多节点必须显式指定。
+	if cfg.volumeNode == "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		cancel()
+		if err != nil {
+			log.Fatalf("cluster-capacity: 探测节点失败,请用 -volume-node 指定: %v", err)
+		}
+		if len(nodes.Items) != 1 {
+			log.Fatalf("cluster-capacity: 集群有 %d 个节点,请用 -volume-node 指定 HDD 卷绑定的节点", len(nodes.Items))
+		}
+		cfg.volumeNode = nodes.Items[0].Name
+		log.Printf("cluster-capacity: HDD 卷绑定节点 %s(自动探测)", cfg.volumeNode)
 	}
 	srv := &server{client: client, cfg: cfg}
 	go sweepLoop(cfg.volumeRoot)

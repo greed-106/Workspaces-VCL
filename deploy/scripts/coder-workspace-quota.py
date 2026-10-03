@@ -2,15 +2,16 @@
 """给 Coder 工作区的持久卷目录设置 XFS project quota。
 
 - 目录来源:local-path provisioner 建在 /mnt/ssd-data/local-path 下,
-  命名形如 pvc-<uuid>_coder-workspaces_<pvc 名>
+  命名形如 pvc-<uuid>_<命名空间>_<pvc 名>
 - 配额大小来源:PVC 的 spec.resources.requests.storage(= 用户在界面上申请的 home_disk_size)
 - 因此容器内 df 看到的容量 = 用户申请值,写超会被内核直接拦下
 """
 import glob, json, os, re, subprocess, sys, zlib
 
-MOUNT = "/mnt/ssd-data"
-BASE = "/mnt/ssd-data/local-path"
-KUBECONFIG = "/etc/kubernetes/admin.conf"
+MOUNT = "__SSD_DATA__"
+BASE = "__SSD_DATA__/local-path"
+NAMESPACE = "__NAMESPACE__"
+KUBECONFIG = "__ADMIN_KUBECONFIG__"
 DRY = "--dry-run" in sys.argv
 
 def active_quota():
@@ -43,12 +44,12 @@ def main():
     if not active_quota():
         print(f"{MOUNT} 未启用 prjquota,跳过(重启后自动生效)")
         return
-    pvcs = kubectl_json(["get", "pvc", "-n", "coder-workspaces", "-o", "json"])["items"]
+    pvcs = kubectl_json(["get", "pvc", "-n", NAMESPACE, "-o", "json"])["items"]
     sizes = {p["metadata"]["name"]: p["spec"]["resources"]["requests"]["storage"]
              for p in pvcs if p["spec"].get("volumeName")}
     done = 0
-    for d in sorted(glob.glob(f"{BASE}/pvc-*_coder-workspaces_*")):
-        m = re.search(r"_coder-workspaces_(.+)$", os.path.basename(d))
+    for d in sorted(glob.glob(f"{BASE}/pvc-*_{NAMESPACE}_*")):
+        m = re.search(rf"_{NAMESPACE}_(.+)$", os.path.basename(d))
         if not m or not os.path.isdir(d):
             continue
         size = sizes.get(m.group(1))

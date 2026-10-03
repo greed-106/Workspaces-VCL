@@ -8,13 +8,13 @@ spec:
   capacity: {storage: 1Gi}
   accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
-  storageClassName: coder-hdd
-  local: {path: /mnt/hdd-data/volumes/_placeholder}
+  storageClassName: __VOLUME_STORAGE_CLASS__
+  local: {path: __VOLUME_ROOT__/_placeholder}
   nodeAffinity:
     required:
       nodeSelectorTerms:
         - matchExpressions:
-            - {key: kubernetes.io/hostname, operator: In, values: ["ubuntu0002"]}
+            - {key: kubernetes.io/hostname, operator: In, values: ["__NODE_NAME__"]}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -25,6 +25,6 @@ metadata:
     coder-hdd-volume: "true"
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: coder-hdd
+  storageClassName: __VOLUME_STORAGE_CLASS__
   volumeName: hdd-none
   resources: {requests: {storage: 1Gi}}

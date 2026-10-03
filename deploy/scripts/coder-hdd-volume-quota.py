@@ -11,10 +11,10 @@
 """
 import json, os, re, subprocess, sys, zlib, pathlib
 
-MOUNT = "/mnt/hdd-data"
-VOLROOT = "/mnt/hdd-data/volumes"
-NAMESPACE = "coder-workspaces"
-KUBECONFIG = "/etc/kubernetes/admin.conf"
+MOUNT = "__HDD_DATA__"
+VOLROOT = "__VOLUME_ROOT__"
+NAMESPACE = "__NAMESPACE__"
+KUBECONFIG = "__ADMIN_KUBECONFIG__"
 LABEL = "coder-hdd-volume=true"
 DRY = "--dry-run" in sys.argv
 QUIET = "--quiet" in sys.argv

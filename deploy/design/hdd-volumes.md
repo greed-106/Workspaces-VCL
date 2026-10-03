@@ -1,6 +1,6 @@
 # HDD 持久卷:现状设计说明
 
-本文描述 HDD 持久卷当前的实际实现,不包含规划内容。相关代码:`deploy/cluster-capacity/`(Go 服务)、`deploy/scripts/coder-hdd-volume-quota.py`(配额脚本)、`deploy/hdd-volumes/`(k8s 对象模板)、`deploy/coder-template-kubernetes/main.tf`(模板挂载)、`site/src/pages/VolumesPage/` 与 `site/src/modules/clusterCapacity/`(前端)。
+本文描述 HDD 持久卷当前的实际实现,不包含规划内容。相关代码:`deploy/cluster-capacity/`(Go 服务)、`deploy/scripts/coder-hdd-volume-quota.py`(配额脚本,占位符模板)、`deploy/hdd-volumes/`(k8s 对象占位符模板,由 `deploy/install.sh` 渲染到 `deploy/generated/hdd-volumes/`)、`deploy/local.env`(本机取值)、`deploy/coder-template-kubernetes/main.tf`(模板挂载)、`site/src/pages/VolumesPage/` 与 `site/src/modules/clusterCapacity/`(前端)。
 
 ## 一、目标与结论
 
@@ -16,18 +16,18 @@
 | PV / PVC 名 | `hdd-<owner>-<name>`,两者同名 |
 | PVC 命名空间 | `coder-workspaces` |
 | PV 类型 | `local`,路径就是数据目录,`persistentVolumeReclaimPolicy: Retain` |
-| 节点绑定 | `nodeAffinity: kubernetes.io/hostname In [ubuntu0002]`(服务 flag `-volume-node`,默认 `ubuntu0002`) |
+| 节点绑定 | `nodeAffinity: kubernetes.io/hostname In [ubuntu0002]`;manifest 里是占位符 `__NODE_NAME__`,服务 flag `-volume-node` 默认空(为空时自动取集群唯一节点,多节点时报错要求显式指定),本机单元显式传该值 |
 | StorageClass | `coder-hdd`:`provisioner: kubernetes.io/no-provisioner`(无动态供给),`volumeBindingMode: WaitForFirstConsumer`,`reclaimPolicy: Retain` |
 | 标签 | `coder-hdd-volume=true`、`coder-hdd-owner=<owner>`、`coder-hdd-name=<name>` |
 | 注解 | `coder.com/hdd-volume-path=<数据目录>`、`coder.com/hdd-volume-size-gb=<size_gb>` |
-| 服务 | 宿主 systemd `cluster-capacity.service`,监听 `:3999`,用 client-go 直接操作 k8s API;flag 默认 `-volume-root /mnt/hdd-data/volumes`、`-volume-storage-class coder-hdd`、`-namespace coder-workspaces` |
+| 服务 | 宿主 systemd `cluster-capacity.service`(由 `deploy/install.sh` 从 `deploy/systemd/cluster-capacity.service` 渲染安装),监听 `:3999`,用 client-go 直接操作 k8s API;flag 默认 `-volume-root /mnt/hdd-data/volumes`、`-volume-storage-class coder-hdd`、`-namespace coder-workspaces`,本机取值由 `deploy/local.env` 渲染 |
 
 创建顺序:建目录、建 PV、建 PVC;PVC 创建失败时回滚删除 PV。owner 与 name 不能为空,也不能含空格或斜杠。PVC 用 `volumeName` 直接指向同名 PV,容量请求与 PV 一致。列表只取带 `coder-hdd-volume=true` 标签的 PVC;对手工创建、缺少 owner/name 标签的卷,从 `hdd-<owner>-<name>` 反推名称。
 
 ## 三、配额
 
 - 机制:XFS project quota,HDD 必须以 `prjquota` 挂载(宿主当前已启用,`findmnt` 可见并已由 timer 应用)。project id = `crc32(PVC 名) % 4000000 + 100`,硬上限 `bhard` 取 PVC 的 `spec.resources.requests.storage`,因此容器内 `df` 看到的是卷的申请值,写超由内核直接拒绝。
-- 应用方式:只有定时脚本在应用:宿主 systemd timer `coder-hdd-volume-quota.timer`(`OnBootSec=3min`,`OnUnitActiveSec=1min`)触发 `coder-hdd-volume-quota.service`,执行 `/usr/local/sbin/coder-hdd-volume-quota.py --quiet`(仓库内 `deploy/scripts/` 与 `deploy/cluster-capacity/` 两份内容相同)。服务端创建卷时不设置配额。
+- 应用方式:只有定时脚本在应用:宿主 systemd timer `coder-hdd-volume-quota.timer`(`OnBootSec=3min`,`OnUnitActiveSec=1min`)触发 `coder-hdd-volume-quota.service`,执行 `/usr/local/sbin/coder-hdd-volume-quota.py --quiet`(仓库内 `deploy/scripts/` 是占位符模板,由 `deploy/install.sh` 渲染后装到该路径)。服务端创建卷时不设置配额。
 - 卷目录来源:优先 PVC 注解 `coder.com/hdd-volume-path`,缺省由 PVC 名推导;脚本会补建缺失的目录,并对每个卷执行 `project -s` 与 `limit -p bhard=...`。
 - 附带行为:脚本同时清理每个卷 `.uploads/` 下超过 24 小时的残留分片。HDD 未以 `prjquota` 挂载时脚本直接跳过;服务读 `/proc/mounts` 判断,并在 `/hdd` 返回 `prjquota_active`,前端据此提示硬配额尚未生效。
 - 与工作区卷配额是两套独立机制:SSD 上的工作区卷由 `coder-workspace-quota.py` 处理。
@@ -36,7 +36,7 @@
 
 - `deploy/coder-template-kubernetes/main.tf` 里的参数 `hdd_volume`(order 7,string,mutable,默认空)填的是卷的 PVC 名。
 - 模板无条件挂载:`local.hdd_claim_name = trimspace(参数) == "" ? "hdd-none" : trimspace(参数)`;deployment 里 volume `hdd` 引用该 PVC,`volume_mount` 固定挂到容器内 `/mnt/data`(卷名不进路径)。
-- 参数留空时挂占位卷 `hdd-none`,定义在 `deploy/hdd-volumes/placeholder.yaml`:1GiB 的 PV + PVC,目录 `/mnt/hdd-data/volumes/_placeholder`;它同样带 `coder-hdd-volume=true` 标签,因此也会被配额脚本按 1GiB 处理。
+- 参数留空时挂占位卷 `hdd-none`,模板是 `deploy/hdd-volumes/placeholder.yaml`(渲染产物 `deploy/generated/hdd-volumes/placeholder.yaml`):1GiB 的 PV + PVC,目录 `/mnt/hdd-data/volumes/_placeholder`;它同样带 `coder-hdd-volume=true` 标签,因此也会被配额脚本按 1GiB 处理。
 - 权限:Pod `security_context` 设 `run_as_user = 1000`、`fs_group = 1000`,容器 `run_as_user = 1000`,卷内文件对 coder(uid 1000)可读写。
 - `hdd_volume` 是 mutable 参数,改它会让工作区重启;卷里的数据不受影响。
 

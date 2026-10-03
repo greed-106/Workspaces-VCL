@@ -7,8 +7,9 @@
 
 ### 控制面
 
-- coderd 由 `coder-dev.service` 托管(User=mingjia、Restart=always、After=kubelet、RequiresMountsFor=/mnt/ssd-data,内嵌 PostgreSQL 自拉起),监听 3001(访问地址 http://10.129.164.15:3001),Prometheus 监听 2114。
-- coderd 源码与二进制在 /data/mingjia/code/coder;用 `./scripts/develop.sh` 调试前先 `systemctl stop coder-dev`,二者抢 3001 端口。
+- coderd 由 `coder-dev.service` 托管(User=mingjia、Restart=always、After=kubelet、RequiresMountsFor=/mnt/ssd-data,内嵌 PostgreSQL 自拉起),监听 3001(访问地址 http://10.129.164.15:3001),Prometheus 监听 2114;单元由 deploy/install.sh 按 deploy/local.env 渲染后装到 /etc/systemd/system/。
+- coderd 源码与二进制在 /data/mingjia/Workspaces-VCL,这是唯一工作副本,控制面从这里构建与运行;用 `./scripts/develop.sh` 调试前先 `systemctl stop coder-dev`,二者抢 3001 端口。
+- 部署配置里的机器相关取值集中在 deploy/local.env(由 deploy/local.env.example 复制,已被 git 忽略);deploy/systemd/、deploy/scripts/、deploy/logrotate/、deploy/hdd-volumes/ 里的模板只写 `__占位符__`(与 local.env 的键同名),`sudo deploy/install.sh` 渲染到 deploy/generated/ 并安装 systemd 单元、配额脚本与 logrotate(`--render-only` 只渲染),渲染出的卷 YAML 在 deploy/generated/hdd-volumes/,供 `kubectl apply`。
 - coderd 日志写 /mnt/ssd-data/logs/coderd.log,由 /etc/logrotate.d/coder-dev 轮转(100M × 4、压缩)。
 - 网页版 VS Code 对同部署的已登录用户开放:模板 `coder_app` 为 `share = "authenticated"`,coderd 以 `--dangerous-allow-path-app-sharing=true` 启动(非属主打开由 404 变为 302)。
 - 集群网络使用 Flannel(未部署 Calico),未启用 NetworkPolicy,工作区之间可以互通。
@@ -16,6 +17,7 @@
 ### 实时容量(cluster-capacity)
 
 - `cluster-capacity`(Go + client-go,实现见 cluster-capacity/main.go)由 `cluster-capacity.service` 常驻,监听 3999。
+- `-volume-node` 默认空:为空时服务自动探测,集群只有一个节点就用它,多节点时报错要求显式指定;本机单元仍显式传 `-volume-node __NODE_NAME__`(渲染为 ubuntu0002)。
 - `GET /capacity` 返回 CPU、内存、GPU、磁盘的实时空闲,口径与模板的容量检查一致(3 秒缓存),申请页前端每 10 秒轮询一次。
 - 服务启动参数就是容量口径:48 核 × 2 倍超分,减去预留 4 核;内存 377 GiB 减去预留 16 GiB;磁盘预算 6800 GB;命名空间 coder-workspaces。
 - 申请页与工作区设置页共用实时容量条 `ClusterCapacityBar`(site/src/pages/CreateWorkspacePage/ClusterCapacityBar.tsx),并带手动刷新按钮。
@@ -67,6 +69,7 @@
 - 工作区持久化只覆盖 persistent_paths 列出的目录,/tmp、/var/run、/root 不持久化。
 - 集群网络沿用 Flannel,不引入 Calico,也不依赖 NetworkPolicy 做工作区隔离。
 - HDD 容量不计入工作区申请页的容量条,只在卷申请页显示。
+- 部署配置模板化:机器相关取值只写在 deploy/local.env(已被 git 忽略),仓库里的单元、脚本、logrotate 与卷 manifest 只写 `__占位符__`,由 deploy/install.sh 渲染与安装;换机器改 local.env 后重跑 `sudo deploy/install.sh`,不直接改 /etc/systemd/system/ 下的单元。
 
 ## 三、仍未完成的待办
 

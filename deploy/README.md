@@ -1,6 +1,6 @@
 # Coder 多用户 GPU 工作区平台部署手册
 
-本手册描述如何在一台 GPU 服务器上从裸机开始搭建按需分配 GPU、CPU、内存与磁盘的多用户工作区平台:底层是单节点 Kubernetes,控制面是跑在宿主机上的 Coder(coderd),工作区是 k8s 里的 Pod,容量与配额由本机服务与 XFS project quota 保证。文档里的路径、参数取值与命令来自本仓库 `deploy/` 下的配置文件以及目标机器的实际状态,按顺序复制执行即可;口令、令牌一律是占位符。
+本手册描述如何在一台 GPU 服务器上从裸机开始搭建按需分配 GPU、CPU、内存与磁盘的多用户工作区平台:底层是单节点 Kubernetes,控制面是跑在宿主机上的 Coder(coderd),工作区是 k8s 里的 Pod,容量与配额由本机服务与 XFS project quota 保证。文档里的路径、参数取值与命令来自本仓库 `deploy/` 下的配置文件以及目标机器的实际状态,按顺序复制执行即可;机器相关取值集中在 `deploy/local.env`(由 `deploy/local.env.example` 复制,已被 git 忽略),口令、令牌一律是占位符。
 
 ## 一、这份文档怎么用
 
@@ -10,23 +10,38 @@
 export REPO=/data/mingjia/Workspaces-VCL
 ```
 
+本仓库以 `/data/mingjia/Workspaces-VCL` 为唯一工作副本:Coder 源码、部署配置与构建产物都在这里,不再使用其它检出目录。控制面从本仓库构建与运行,systemd 单元的 `WorkingDirectory`、`ExecStart` 与 `--global-config` 都指向它。
+
+部署配置里所有跟机器相关的取值(用户名、检出目录、访问地址、存储路径、节点名、容量参数)集中在 `deploy/local.env`,它由 `deploy/local.env.example` 复制而来,已被 git 忽略。仓库里的配置模板(`deploy/systemd/`、`deploy/scripts/`、`deploy/logrotate/`、`deploy/hdd-volumes/`)只写 `__占位符__`,占位符与 `deploy/local.env` 的键同名:
+
+```bash
+cd /data/mingjia/Workspaces-VCL
+cp deploy/local.env.example deploy/local.env    # 首次;按本机情况修改
+${EDITOR:-vi} deploy/local.env
+sudo deploy/install.sh                          # 渲染到 deploy/generated/,并安装单元、脚本与 logrotate
+sudo deploy/install.sh --render-only            # 只渲染,不改系统文件
+```
+
+`sudo deploy/install.sh` 把 systemd 单元装到 `/etc/systemd/system/`、配额脚本装到 `/usr/local/sbin/`、logrotate 装到 `/etc/logrotate.d/`,最后执行 `systemctl daemon-reload`。渲染出的卷 YAML 在 `deploy/generated/hdd-volumes/`,用 `kubectl apply` 应用。
+
 仓库文件与安装位置的对应关系:
 
 | 仓库路径 | 安装或使用位置 |
 | --- | --- |
-| `deploy/systemd/*.service` 与 `*.timer` | `/etc/systemd/system/` |
-| `deploy/scripts/*.py` | `/usr/local/sbin/`,权限 0755 |
-| `deploy/logrotate/coder-dev` | `/etc/logrotate.d/coder-dev` |
+| `deploy/local.env.example` | 复制为 `deploy/local.env`(本机取值,git 忽略) |
+| `deploy/install.sh` | 渲染 `deploy/generated/` 并安装单元、脚本与 logrotate |
+| `deploy/systemd/*.service` 与 `*.timer` | 占位符模板,渲染后装到 `/etc/systemd/system/` |
+| `deploy/scripts/*.py` | 占位符模板,渲染后装到 `/usr/local/sbin/`,权限 0755 |
+| `deploy/logrotate/coder-dev` | 占位符模板,渲染后装到 `/etc/logrotate.d/coder-dev` |
+| `deploy/hdd-volumes/*.yaml` | 占位符模板(StorageClass、占位卷与示例卷),渲染到 `deploy/generated/hdd-volumes/` |
+| `deploy/generated/` | 渲染产物:`systemd/`、`scripts/`、`logrotate/`、`hdd-volumes/` |
 | `deploy/cluster-capacity/` | 容量服务源码,`go build` 后装到 `/usr/local/bin/cluster-capacity` |
 | `deploy/coder-template-kubernetes/` | Coder 模板目录(`main.tf` 与 `scripts/check-capacity.sh`) |
 | `deploy/workspace-image/` | 工作区镜像构建上下文(`Dockerfile` 与 `build.sh`) |
-| `deploy/hdd-volumes/` | HDD 卷的 StorageClass、占位卷与示例卷 manifest |
 | `deploy/gpu-operator-values.yaml` | GPU Operator 的 Helm values |
 | `deploy/kube-flannel-patched.yml` | Flannel manifest,已含网卡参数 |
 | `deploy/design/hdd-volumes.md` | HDD 数据卷设计说明 |
 | `deploy/CHANGES-FROM-UPSTREAM.md` | 相对 Coder 上游的前端改动清单 |
-
-systemd 单元里的用户名是 `mingjia`,代码目录是 `/data/mingjia/code/coder`。换机器时按实际值替换,替换点集中在第七章与第十四章。
 
 ## 二、项目概览与架构
 
@@ -377,7 +392,7 @@ SQLC 必须用 `coder/sqlc` fork(修了上游 ambiguous column 问题),revision 
 ### 7.2 构建
 
 ```bash
-cd /data/mingjia/code/coder
+cd /data/mingjia/Workspaces-VCL
 export TMPDIR=/mnt/ssd-data/tmp GOTMPDIR=/mnt/ssd-data/tmp MAKEFLAGS='OS_ARCHES=linux_amd64'
 export PATH=/usr/local/go/bin:/mnt/ssd-data/mingjia-caches/go/bin:/data/mingjia/.local/share/fnm/node-versions/v24.21.0/installation/bin:$PATH
 export GOPATH=/mnt/ssd-data/mingjia-caches/go GOCACHE=/mnt/ssd-data/mingjia-caches/go-build
@@ -390,7 +405,7 @@ make site/out/index.html build/coder_linux_amd64 build/coder-slim_linux_amd64
 ### 7.3 首次启动与管理员账号
 
 ```bash
-cd /data/mingjia/code/coder
+cd /data/mingjia/Workspaces-VCL
 export TMPDIR=/mnt/ssd-data/tmp CODER_DEV_SKIP_SETUP=true
 export CODER_DEV_PORT=3001 CODER_DEV_WEB_PORT=7080 CODER_DEV_PROXY_PORT=3010 CODER_DEV_PROMETHEUS_PORT=2114
 export CODER_DEV_ACCESS_URL=http://10.129.164.15:3001
@@ -403,7 +418,7 @@ export CODER_DEV_ACCESS_URL=http://10.129.164.15:3001
 curl -X POST http://127.0.0.1:3001/api/v2/users/first -H 'Content-Type: application/json' \
   -d '{"email":"admin@coder.com","username":"admin","name":"Admin User","password":"<管理员口令>"}'
 
-cd /data/mingjia/code/coder
+cd /data/mingjia/Workspaces-VCL
 TOKEN=$(curl -sS -X POST http://127.0.0.1:3001/api/v2/users/login -H 'Content-Type: application/json' \
   -d '{"email":"admin@coder.com","password":"<管理员口令>"}' | jq -r .session_token)
 mkdir -p ./.coderv2
@@ -418,25 +433,24 @@ printf '%s' 'http://127.0.0.1:3001' > ./.coderv2/url
 ### 7.4 systemd 常驻
 
 ```bash
-sudo install -m 0644 "$REPO/deploy/systemd/coder-dev.service" /etc/systemd/system/coder-dev.service
-sudo install -m 0644 "$REPO/deploy/logrotate/coder-dev" /etc/logrotate.d/coder-dev
-sudo systemctl daemon-reload
+cd "$REPO"
+sudo deploy/install.sh
 sudo systemctl enable --now coder-dev
 systemctl status coder-dev
 ```
 
-单元要点:`User=mingjia`、`WorkingDirectory=/data/mingjia/code/coder`、`Environment=TMPDIR=/mnt/ssd-data/tmp`、`After=network-online.target kubelet.service`、`RequiresMountsFor=/mnt/ssd-data`、`Restart=always` 与 `RestartSec=10`,失败上限 `StartLimitBurst=3` / `StartLimitIntervalSec=120`。`ExecStart` 的关键参数:
+单元模板在 `deploy/systemd/coder-dev.service`,渲染结果在 `deploy/generated/systemd/coder-dev.service`。单元要点:`User=__CODER_USER__`、`WorkingDirectory=__CODER_DIR__`、`Environment=HOME=__CODER_HOME__`、`Environment=TMPDIR=__TMPDIR__`、`After=network-online.target kubelet.service`、`RequiresMountsFor=__SSD_DATA__`、`Restart=always` 与 `RestartSec=10`,失败上限 `StartLimitBurst=3` / `StartLimitIntervalSec=120`;本机渲染后是 `User=mingjia`、`WorkingDirectory=/data/mingjia/Workspaces-VCL`、`TMPDIR=/mnt/ssd-data/tmp`、`RequiresMountsFor=/mnt/ssd-data`。`ExecStart` 的关键参数(取值来自 `deploy/local.env`):
 
 | 参数 | 作用 |
 | --- | --- |
-| `--http-address 0.0.0.0:3001` | 监听地址 |
-| `--access-url http://10.129.164.15:3001` | 浏览器与工作区使用的访问地址,必须写节点 IP |
+| `--http-address __HTTP_ADDR__` | 监听地址(`0.0.0.0:3001`) |
+| `--access-url __ACCESS_URL__` | 浏览器与工作区使用的访问地址,必须写节点 IP |
 | `--dangerous-allow-cors-requests=true` | 把 coderd API 的 CORS 头设为 `*`,上游默认只放行同一用户的工作区 app 之间的跨域;开发实例也带这个参数 |
 | `--dangerous-allow-path-app-sharing=true` | 允许共享基于路径的 app;不开时这类 app 的共享级别会被强制降为 `owner`,非属主打不开网页 VS Code |
 | `--prometheus-enable --prometheus-address 0.0.0.0:2114` | 指标 |
 | `--swagger-enable`、`--enable-terraform-debug-mode` | API 文档与 Terraform 调试输出 |
 
-日志写到 `/mnt/ssd-data/logs/coderd.log`,轮转配置 100M × 4、`copytruncate`。
+日志路径由 `__LOG_DIR__` 决定,本机写到 `/mnt/ssd-data/logs/coderd.log`,轮转配置 100M × 4、`copytruncate`(模板 `deploy/logrotate/coder-dev`)。
 
 ### 7.5 日常操作
 
@@ -543,7 +557,7 @@ cd /tmp/tfval
 首次创建与后续更新:
 
 ```bash
-cd /data/mingjia/code/coder
+cd /data/mingjia/Workspaces-VCL
 ./build/coder-slim_linux_amd64 --global-config ./.coderv2 templates create kubernetes \
   --directory "$REPO/deploy/coder-template-kubernetes" \
   --variable use_kubeconfig=true --variable namespace=coder-workspaces --yes
@@ -580,17 +594,12 @@ curl -X POST "http://127.0.0.1:3001/api/v2/workspaces/<id>/builds" -H "Coder-Ses
 机制:PVC 的 `spec.resources.requests.storage` 就是要给用户的容量;定时脚本按 PVC 名找到 local-path 建出的目录,用 XFS project quota 设硬上限;容器里 `df` 因此显示申请值而不是整盘 7.4T。
 
 ```bash
-sudo install -m 0755 "$REPO/deploy/scripts/coder-workspace-quota.py" /usr/local/sbin/coder-workspace-quota.py
-sudo install -m 0755 "$REPO/deploy/scripts/coder-hdd-volume-quota.py" /usr/local/sbin/coder-hdd-volume-quota.py
-sudo install -m 0644 "$REPO/deploy/systemd/coder-workspace-quota.service" /etc/systemd/system/
-sudo install -m 0644 "$REPO/deploy/systemd/coder-workspace-quota.timer" /etc/systemd/system/
-sudo install -m 0644 "$REPO/deploy/systemd/coder-hdd-volume-quota.service" /etc/systemd/system/
-sudo install -m 0644 "$REPO/deploy/systemd/coder-hdd-volume-quota.timer" /etc/systemd/system/
-sudo systemctl daemon-reload
+cd "$REPO"
+sudo deploy/install.sh
 sudo systemctl enable --now coder-workspace-quota.timer coder-hdd-volume-quota.timer
 ```
 
-两个脚本都以 root 运行、用 `KUBECONFIG=/etc/kubernetes/admin.conf` 调 kubectl,内部先检查挂载选项里有没有 `prjquota`,没有就跳过。
+两个脚本由 `deploy/install.sh` 按 `deploy/local.env` 渲染后装到 `/usr/local/sbin/`(模板里是 `__ADMIN_KUBECONFIG__`、`__SSD_DATA__`、`__HDD_DATA__`、`__VOLUME_ROOT__`、`__NAMESPACE__` 这些占位符),都以 root 运行、用 `KUBECONFIG=/etc/kubernetes/admin.conf` 调 kubectl,内部先检查挂载选项里有没有 `prjquota`,没有就跳过。
 
 `coder-workspace-quota.py` 扫描 `/mnt/ssd-data/local-path/pvc-*_coder-workspaces_*`,按 PVC 申请值设配额;`coder-hdd-volume-quota.py` 处理带标签 `coder-hdd-volume=true` 的 PVC,目录取注解 `coder.com/hdd-volume-path`,按申请值设配额,并清理卷内 `.uploads` 下超过 24 小时的残留分片。单位按二进制换算(Gi = 1024^3)。
 
@@ -615,8 +624,9 @@ export GOPATH=/mnt/ssd-data/mingjia-caches/go GOCACHE=/mnt/ssd-data/mingjia-cach
 export GOPROXY=https://goproxy.cn,direct GOTOOLCHAIN=local TMPDIR=/mnt/ssd-data/tmp
 go build -o cluster-capacity .
 sudo install -m 0755 cluster-capacity /usr/local/bin/cluster-capacity
-sudo install -m 0644 "$REPO/deploy/systemd/cluster-capacity.service" /etc/systemd/system/
-sudo systemctl daemon-reload
+
+cd "$REPO"
+sudo deploy/install.sh
 sudo systemctl enable --now cluster-capacity
 ```
 
@@ -629,9 +639,10 @@ sudo systemctl enable --now cluster-capacity
 | `-cpu-total` / `-cpu-overcommit` / `-cpu-reserved` | `48` / `2` / `4` | CPU 预算为物理核数乘超分系数再扣预留 |
 | `-mem-total-gib` / `-mem-reserved-gib` | `377` / `16` | 内存总量与系统预留 |
 | `-disk-budget-gb` | `6800` | 工作区磁盘预算 |
-| `-volume-root` / `-volume-storage-class` / `-volume-node` | `/mnt/hdd-data/volumes` / `coder-hdd` / `ubuntu0002` | HDD 卷目录、StorageClass 与绑定节点,均为默认值 |
+| `-volume-root` / `-volume-storage-class` | `/mnt/hdd-data/volumes` / `coder-hdd` | HDD 卷目录与 StorageClass,单元里由 `__VOLUME_ROOT__`、`__VOLUME_STORAGE_CLASS__` 渲染 |
+| `-volume-node` | `ubuntu0002` | HDD 卷绑定节点,单元里由 `__NODE_NAME__` 渲染;程序默认空值,留空时自动取集群唯一节点,多节点时报错要求显式指定 |
 
-`-cpu-overcommit` 必须与模板变量 `cpu_overcommit` 一致,否则页面显示与申请校验口径不同。
+`-cpu-overcommit` 必须与模板变量 `cpu_overcommit` 一致,否则页面显示与申请校验口径不同。`-volume-node` 显式传入只是为了让单元与集群现状一致,单节点集群留空也能跑。
 
 ### 11.1 接口
 
@@ -661,19 +672,21 @@ sudo systemctl enable --now cluster-capacity
 | PVC 与 PV 名 | `hdd-<owner>-<name>` |
 | 数据目录 | `/mnt/hdd-data/volumes/<owner>-<name>` |
 | StorageClass | `coder-hdd`(`kubernetes.io/no-provisioner`,`WaitForFirstConsumer`,`Retain`) |
-| 绑定节点与挂载点 | `kubernetes.io/hostname=ubuntu0002`,容器内挂到 `/mnt/data` |
+| 绑定节点与挂载点 | `kubernetes.io/hostname=ubuntu0002`(卷模板里是 `__NODE_NAME__`),容器内挂到 `/mnt/data` |
 | 回收策略 | `Retain`,删卷默认保留数据目录,只有 `purge=true` 才删 |
 
-先建 StorageClass 与占位卷(占位卷让模板可以无条件挂载,避免 plan 阶段出现未知值),再建卷,两种建卷方式等价:
+`deploy/hdd-volumes/` 里是占位符模板(`__VOLUME_STORAGE_CLASS__`、`__VOLUME_ROOT__`、`__NODE_NAME__`),渲染产物在 `deploy/generated/hdd-volumes/`,apply 的是渲染产物。先建 StorageClass 与占位卷(占位卷让模板可以无条件挂载,避免 plan 阶段出现未知值),再建卷,两种建卷方式等价:
 
 ```bash
+cd "$REPO"
+sudo deploy/install.sh --render-only           # 只渲染,不改系统文件
 export KUBECONFIG=/data/mingjia/.kube/config
-kubectl apply -f "$REPO/deploy/hdd-volumes/storageclass.yaml"
-kubectl apply -f "$REPO/deploy/hdd-volumes/placeholder.yaml"
+kubectl apply -f deploy/generated/hdd-volumes/storageclass.yaml
+kubectl apply -f deploy/generated/hdd-volumes/placeholder.yaml
 
 curl -X POST http://127.0.0.1:3999/volumes -H 'Content-Type: application/json' \
   -d '{"owner":"alice","name":"dataset","size_gb":100}'
-kubectl apply -f "$REPO/deploy/hdd-volumes/example-volume.yaml"
+kubectl apply -f deploy/generated/hdd-volumes/example-volume.yaml
 ```
 
 模板参数 `hdd_volume` 填 PVC 名(例如 `hdd-alice-dataset`)。同一个卷允许同时挂到多个工作区,读写冲突由用户自行保证;删除卷要求没有运行中的工作区在用它。
@@ -703,7 +716,7 @@ hiddenDisplayApps = ["vscode", "vscode_insiders"]
 重建与生效:
 
 ```bash
-cd /data/mingjia/code/coder
+cd /data/mingjia/Workspaces-VCL
 export PATH=/usr/local/go/bin:/mnt/ssd-data/mingjia-caches/go/bin:$PATH
 export GOPATH=/mnt/ssd-data/mingjia-caches/go GOCACHE=/mnt/ssd-data/mingjia-caches/go-build
 export GOPROXY=https://goproxy.cn,direct GOTOOLCHAIN=local TMPDIR=/mnt/ssd-data/tmp
@@ -739,7 +752,7 @@ sudo systemctl restart coder-dev
 | `coder-hdd-volume-quota.timer` | 定时 | 每分钟给 HDD 卷设配额并清残留分片,`OnBootSec=3min` | `systemctl list-timers coder-hdd-volume-quota.timer` |
 | `kubelet`、`containerd` | 常驻 | 集群运行时 | `systemctl status kubelet containerd` |
 
-两个 `.service` 都是 `Type=oneshot`,由同名 timer 拉起,手工触发用 `sudo systemctl start coder-workspace-quota.service`。换机器时的替换点:`coder-dev.service` 里的 `User`、`WorkingDirectory`、`--global-config`、`--access-url`、`HOME`、`PATH`;`cluster-capacity.service` 里的 `User`、`-kubeconfig` 与各项容量参数;两个配额脚本里的 `MOUNT`、`BASE`、`KUBECONFIG`、`VOLROOT`、`NAMESPACE`。
+两个 `.service` 都是 `Type=oneshot`,由同名 timer 拉起,手工触发用 `sudo systemctl start coder-workspace-quota.service`。单元与 timer 都在 `deploy/systemd/`,由 `deploy/install.sh` 渲染后装到 `/etc/systemd/system/`。换机器时只改 `deploy/local.env`(用户名、检出目录、访问地址、存储路径、节点名、kubeconfig、容量参数),然后重新运行 `sudo deploy/install.sh`,不要直接改 `/etc/systemd/system/` 下的单元。
 
 ### 14.2 日志位置
 
@@ -795,14 +808,15 @@ journalctl --disk-usage
 
 | 内容 | 路径 | 方式 |
 | --- | --- | --- |
-| Coder 数据库 | `/data/mingjia/code/coder/.coderv2/postgres` | 先停 `coder-dev`,再整目录打包或 rsync |
-| Coder 访问配置 | `.coderv2/url` 与 `.coderv2/session` | 文本备份 |
+| Coder 数据库 | `/data/mingjia/Workspaces-VCL/.coderv2/postgres` | 先停 `coder-dev`,再整目录打包或 rsync |
+| Coder 访问配置 | `/data/mingjia/Workspaces-VCL/.coderv2/{url,session}` | 文本备份 |
 | 集群凭据与证书 | `/etc/kubernetes/pki`、`/etc/kubernetes/admin.conf`、`/data/mingjia/.kube/config` | root 打包 |
 | etcd 数据 | `/var/lib/etcd` | etcd 快照,或停 kubelet 后打包 |
 | 集群配置 | `/etc/containerd`、`/etc/cni/net.d`、`/etc/default/kubelet`、`/etc/k8s-resolv.conf`、`/etc/sysctl.d/k8s.conf`、`/etc/modules-load.d/k8s.conf`、`/etc/fstab` | root 打包 |
 | 工作区持久卷 | `/mnt/ssd-data/local-path` | 停掉工作区后 rsync |
 | HDD 数据卷 | `/mnt/hdd-data/volumes` | 停掉挂载它的工作区后 rsync;该卷跨 4 块盘且无冗余,这里不是备份的替代品 |
 | 模板、镜像定义、服务与脚本 | 本仓库 `deploy/` | git 提交;`gpu-operator-values.yaml` 可用于重建集群侧组件 |
+| 本机取值 | `deploy/local.env` | 被 git 忽略,单独文本备份;换机器时改它后重新运行 `sudo deploy/install.sh` |
 
 ### 14.6 重启后检查清单
 
@@ -880,7 +894,8 @@ cdi:
 
 | 路径 | 内容 |
 | --- | --- |
-| `/data/mingjia/code/coder` | Coder 源码与构建产物,`.coderv2` 存数据库与会话 |
+| `/data/mingjia/Workspaces-VCL` | Coder 源码与构建产物;`.coderv2` 在仓库根下,存数据库与会话 |
+| `/data/mingjia/Workspaces-VCL/deploy/generated` | `deploy/install.sh` 渲染出的单元、脚本、logrotate 与卷 YAML |
 | `/mnt/ssd-data/containerd` | containerd root,镜像与快照 |
 | `/mnt/ssd-data/local-path` | 工作区持久卷 |
 | `/mnt/ssd-data/logs`、`/mnt/ssd-data/tmp`、`/mnt/ssd-data/mingjia-caches` | coderd 日志、构建临时目录与 Go 缓存 |

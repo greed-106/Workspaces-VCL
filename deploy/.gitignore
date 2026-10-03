@@ -7,3 +7,7 @@ workspace-image/code-server.tar.gz
 # 编译产物(源码在 cluster-capacity/main.go,用 go build 重建)
 cluster-capacity/cluster-capacity
 cluster-capacity/cluster-capacity-*
+
+# 本机取值与渲染产物(由 deploy/install.sh 生成)
+local.env
+generated/

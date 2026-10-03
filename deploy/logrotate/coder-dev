@@ -1,4 +1,4 @@
-/mnt/ssd-data/logs/coderd.log {
+__LOG_DIR__/coderd.log {
     weekly
     rotate 4
     size 100M

@@ -11,16 +11,16 @@ spec:
     storage: 100Gi
   accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
-  storageClassName: coder-hdd
+  storageClassName: __VOLUME_STORAGE_CLASS__
   local:
-    path: /mnt/hdd-data/volumes/admin-hddtest
+    path: __VOLUME_ROOT__/admin-hddtest
   nodeAffinity:
     required:
       nodeSelectorTerms:
         - matchExpressions:
             - key: kubernetes.io/hostname
               operator: In
-              values: ["ubuntu0002"]
+              values: ["__NODE_NAME__"]
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -31,10 +31,10 @@ metadata:
     coder-hdd-volume: "true"
     coder-hdd-owner: "admin"
   annotations:
-    coder.com/hdd-volume-path: /mnt/hdd-data/volumes/admin-hddtest
+    coder.com/hdd-volume-path: __VOLUME_ROOT__/admin-hddtest
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: coder-hdd
+  storageClassName: __VOLUME_STORAGE_CLASS__
   volumeName: hdd-admin-hddtest
   resources:
     requests:

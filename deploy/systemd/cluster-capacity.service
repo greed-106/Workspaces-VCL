@@ -4,14 +4,17 @@ After=kubelet.service network-online.target
 Wants=network-online.target
 
 [Service]
-User=mingjia
+User=__CODER_USER__
 ExecStart=/usr/local/bin/cluster-capacity \
-    -addr :3999 \
-    -namespace coder-workspaces \
-    -kubeconfig /data/mingjia/.kube/config \
-    -cpu-total 48 -cpu-overcommit 2 -cpu-reserved 4 \
-    -mem-total-gib 377 -mem-reserved-gib 16 \
-    -disk-budget-gb 6800
+    -addr __CAPACITY_ADDR__ \
+    -namespace __NAMESPACE__ \
+    -kubeconfig __KUBECONFIG__ \
+    -cpu-total __CPU_TOTAL__ -cpu-overcommit __CPU_OVERCOMMIT__ -cpu-reserved __CPU_RESERVED__ \
+    -mem-total-gib __MEM_TOTAL_GIB__ -mem-reserved-gib __MEM_RESERVED_GIB__ \
+    -disk-budget-gb __DISK_BUDGET_GB__ \
+    -volume-root __VOLUME_ROOT__ \
+    -volume-storage-class __VOLUME_STORAGE_CLASS__ \
+    -volume-node __NODE_NAME__
 Restart=always
 RestartSec=3
 

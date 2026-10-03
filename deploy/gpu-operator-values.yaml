@@ -1,11 +1,11 @@
-# NVIDIA GPU Operator 在 ubuntu0002 上的配置
+# NVIDIA GPU Operator 配置(单节点、GPU 直通)
 #
 # 模式:Operator 全权管理驱动 + 容器工具链(driver-less node)
 #
 # 2026-09-30 变更:主机原有的 Ubuntu NVIDIA 驱动(nvidia-driver-595-open 等 19 个包)
 # 已卸载,改由 Operator 的容器化驱动接管。**已生效,未重启即完成**:
 # 停掉 GPU 客户端 Pod 后用 rmmod 卸掉旧模块,驱动容器随即安装并加载了 595.91.07。
-# 详见 ~/k8s-setup/README.md 第十一节(含当时踩的两个坑和修法)。
+# 安装与验收步骤见 deploy/README.md 第六章。
 #
 # 重启行为:/run 是 tmpfs,所以每次重启后驱动容器会重装一遍驱动(约 2-4 分钟),
 # 期间 GPU 不可用,之后 operator 会自动把 toolkit/device plugin/GFD/DCGM 拉起。

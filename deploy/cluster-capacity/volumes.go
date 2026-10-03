@@ -29,7 +29,9 @@ import (
 )
 
 const (
-	volumeLabel      = "coder-hdd-volume"
+	volumeLabel = "coder-hdd-volume"
+	// volumeSystemAnno 标记系统占位卷(见 deploy/hdd-volumes/placeholder.yaml)。
+	volumeSystemAnno = "coder.com/hdd-volume-system"
 	volumeOwnerLabel = "coder-hdd-owner"
 	volumeNameLabel  = "coder-hdd-name"
 	volumePathAnno   = "coder.com/hdd-volume-path"
@@ -130,6 +132,10 @@ func (s *server) listVolumes(ctx context.Context) ([]volume, error) {
 	quota, quotaOK := s.usageSnapshot()
 	out := []volume{}
 	for _, pvc := range pvcs.Items {
+		// 占位卷(参数留空时挂载的 hdd-none)不是用户的卷,不进列表、也不计数。
+		if pvc.Annotations[volumeSystemAnno] == "true" {
+			continue
+		}
 		owner := pvc.Labels[volumeOwnerLabel]
 		name := pvc.Labels[volumeNameLabel]
 		if name == "" { // 兼容手工创建的卷:从 hdd-<owner>-<name> 推导

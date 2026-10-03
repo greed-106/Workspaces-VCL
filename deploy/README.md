@@ -2,6 +2,8 @@
 
 本手册描述如何在一台 GPU 服务器上从裸机开始搭建按需分配 GPU、CPU、内存与磁盘的多用户工作区平台:底层是单节点 Kubernetes,控制面是跑在宿主机上的 Coder(coderd),工作区是 k8s 里的 Pod,容量与配额由本机服务与 XFS project quota 保证。文档里的路径、参数取值与命令来自本仓库 `deploy/` 下的配置文件以及目标机器的实际状态,按顺序复制执行即可;机器相关取值集中在 `deploy/local.env`(由 `deploy/local.env.example` 复制,已被 git 忽略),口令、令牌一律是占位符。
 
+面向使用者的说明是另一份文档:`deploy/user-guide.md`(账号申请、改密码、数据卷、创建与修改工作区、数据存放位置、怎么确认自己拿到的资源),可以直接发给用户;模板自带的简短介绍在 `deploy/coder-template-kubernetes/README.md`,推送模板后会显示在 WebUI 的模板页面上。
+
 ## 一、这份文档怎么用
 
 用 `$REPO` 表示本仓库的检出路径,开始前先设置:
@@ -661,7 +663,7 @@ sudo systemctl enable --now cluster-capacity
 | POST | `/volumes/{pvc}/uploads/{id}/complete?...` | 校验后原子落盘到卷根目录,`on_conflict` 取 `overwrite` 或 `rename`,缺省时同名文件返回 409 |
 | GET | `/` | HDD 卷申请页,含列表、申请与删除 |
 
-响应带 `Access-Control-Allow-Origin: *` 与 `Cache-Control: no-store`,预检请求返回 204。服务对 POST 与 DELETE 只解析 JSON、不鉴权,因此单卷 100 到 1000 GB、每人 1000 GB 的限制只写在页面里,API 不受限。
+响应带 `Access-Control-Allow-Origin: *` 与 `Cache-Control: no-store`,预检请求返回 204。单卷 100 到 1000 GB、每人 1000 GB 的范围与步长定义在卷页面里,调整时改 `site/src/pages/VolumesPage/VolumesPage.tsx` 的常量。
 
 ### 11.2 容量口径
 
@@ -713,7 +715,7 @@ visibilityRules   = { gpu_count: { dependsOn: "gpu_model", hiddenForValues: ["no
 hiddenDisplayApps = ["vscode", "vscode_insiders"]
 ```
 
-步进器到上下限时不禁用按钮,而是给出"已达上限"提示;隐藏只是界面行为,值仍会提交,未申请 GPU 时模板本来就忽略 `gpu_count`;范围与步长只在前端生效,CLI 与 API 不受限。容量条在申请页与工作区参数页顶部,每 10 秒刷新并可手动刷新,接口不可达时整条隐藏,不影响申请。
+步进器到上下限时不禁用按钮,而是给出"已达上限"提示;隐藏只是界面行为,值仍会提交,未申请 GPU 时模板本来就忽略 `gpu_count`。范围与步长写在前端常量表 `site/src/modules/workspaces/DynamicParameter/parameterUiHints.ts`,调整时以它为准。容量条在申请页与工作区参数页顶部,每 10 秒刷新并可手动刷新,接口不可达时整条隐藏,不影响申请。
 
 重建与生效:
 

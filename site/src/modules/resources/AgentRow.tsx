@@ -62,6 +62,7 @@ import { AgentAlert } from "#/pages/WorkspacePage/AgentAlert";
 import { AppStatuses } from "#/pages/WorkspacePage/AppStatuses";
 import { AgentApps, organizeAgentApps } from "./AgentApps/AgentApps";
 import { AgentExternal } from "./AgentExternal";
+import { AgentGpuHistory } from "./AgentGpuHistory";
 import { AgentLatency } from "./AgentLatency";
 import { AGENT_LOG_LINE_HEIGHT } from "./AgentLogs/AgentLogLine";
 import { AgentLogs } from "./AgentLogs/AgentLogs";
@@ -496,6 +497,8 @@ export const AgentRow: React.FC<AgentRowProps> = ({
 					)}
 
 				<AgentMetadata initialMetadata={initialMetadata} agent={agent} />
+
+				<AgentGpuHistory workspaceId={workspace.id} />
 			</div>
 
 			<section className="border-0 border-t border-solid border-border">

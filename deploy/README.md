@@ -877,6 +877,90 @@ curl -s http://<域名>:3999/capacity | head -c 120
 
 HTTPS 尚未启用:域名解析到内网地址,无法用 Let's Encrypt 的 HTTP 校验签发证书。后续如需 HTTPS,可在 nginx 上加 443 监听,证书用内部 CA 或自签证书,并把 `local.env` 的 `ACCESS_URL` 改为 `https://<域名>` 后重新执行 `install.sh`。
 
+### 14.8 GPU 历史指标
+
+工作区页面的监控区域(CPU Usage / RAM Usage 下面)会显示一块 GPU 历史看板:曲线是 GPU 利用率(左轴),柱状是显存占用(右轴);同一时刻显示一张卡,用下拉切换显卡,切换时曲线做补间动画;时间范围支持「小时(1/2/4/8/12/24,默认 8)」与「天(1/2/3/5/7)」两档。
+
+数据链路:
+
+```text
+DCGM Exporter(GPU Operator 自带,:9400)
+   │  每分钟一次,经 k8s API 的 Pod 代理读取 /metrics(不额外暴露端口)
+   ▼
+gpu-metrics 服务(宿主 systemd,127.0.0.1:3997)
+   │  按 (工作区, GPU) 落一行
+   ▼
+PostgreSQL 库 gpu_metrics(表 gpu_samples,保留 7 天,每小时清理一次)
+   ▲
+   │  nginx 把 /gpu-api/ 转发到该服务,浏览器同源访问
+前端:工作区页面 → AgentGpuHistory 组件
+```
+
+要点与运维:
+
+| 项 | 说明 |
+| --- | --- |
+| 采集范围 | 只记录**申请了 GPU 的工作区**:DCGM 输出里带 `pod` 标签的样本才会入库,未分配的卡不产生数据 |
+| 归属方式 | 用 Pod 上的 `com.coder.workspace.id` / `com.coder.workspace.name` / `com.coder.user.username` 标签解析(模板已内置),解析结果带缓存 |
+| 采样与保留 | `-interval 1m`、`-retention 168h`(单元文件里可改);数据量约每卡每天 1440 行,整机 10 卡 7 天约 20 MB |
+| 数据库 | 复用控制面自带 PostgreSQL,但使用独立库 `gpu_metrics` 与独立角色,不动 Coder 自己的库表;口令写在 `/etc/gpu-metrics.env`(0600),由 `deploy/local.env` 的 `METRICS_PG_URL` 渲染 |
+| 接口 | `GET /gpu-api/gpus?workspace_id=<id>` 列出该工作区的卡;`GET /gpu-api/series?workspace_id=<id>&gpu=<uuid>&hours=<n>` 取序列(自动降采样到 600 点以内);`GET /gpu-api/healthz` 查看最近一次采样时间 |
+| 可见性 | 指标对所有登录用户可见;工作区内的 VS Code、Terminal 等入口仍按 Coder 自身的权限模型控制,不受此影响 |
+| 重建与重启 | `cd deploy/gpu-metrics && go build -o /usr/local/bin/gpu-metrics .` 后 `systemctl restart gpu-metrics`;`sudo deploy/install.sh` 会在能找到 Go 工具链时自动重建 |
+
+首次部署时需要先建库与角色(口令自己生成,只写进 `deploy/local.env`):
+
+```bash
+ADMIN=$(./build/coder_linux_amd64 --global-config ./.coderv2 server postgres-builtin-url | sed 's/^psql "//; s/"$//')
+# 用上面这个连接串执行:
+#   create role gpu_metrics login password '<口令>';
+#   create database gpu_metrics owner gpu_metrics;
+# 然后把连接串写进 deploy/local.env:
+#   METRICS_PG_URL=postgres://gpu_metrics:<口令>@127.0.0.1:41231/gpu_metrics?sslmode=disable
+sudo deploy/install.sh && sudo systemctl enable --now gpu-metrics
+```
+
+排查:
+
+```bash
+systemctl status gpu-metrics                 # 服务状态
+journalctl -u gpu-metrics -n 30             # 采集日志(每轮会打印记录的卡数)
+curl -s http://127.0.0.1:3997/healthz       # 最近一次成功采样时间与最近一次错误
+curl -s http://workspace.mingjia.tech/gpu-api/healthz
+```
+
+如果看板上没有数据:确认该工作区申请了 GPU;确认 `kubectl -n gpu-operator get pod -l app=nvidia-dcgm-exporter` 有 Running 的 exporter;再看 `journalctl` 里是否打印"已记录 N 张卡的样本"。
+
+### 14.9 只读实例看板(Dashboard)
+
+左上角导航新增 **Dashboard**:所有登录用户都能看到**当前正在运行的实例**及其配置与用量,但**没有任何操作入口**,也不提供 VS Code / 终端(那些仍然只有工作区属主能用,见 14.10)。
+
+| 列 | 来源 |
+| --- | --- |
+| 用户 / 实例 | Pod 标签 `com.coder.user.username` 与 `com.coder.workspace.name` |
+| 状态 | Pod `status.phase`(只列 Running) |
+| 配置(CPU/内存/GPU/磁盘) | 容器 `dev` 的 limits + 挂到 `/home/coder` 的 PVC 申请容量 |
+| 当前用量(CPU/内存/磁盘) | kubelet Summary API(`/api/v1/nodes/<node>/proxy/stats/summary`,经 k8s API 代理,不需要 metrics-server);磁盘只统计 home 卷 |
+| GPU(利用率/显存) | `gpu_samples` 里该工作区最近一次采样 |
+| 运行时间 | Pod `status.startTime` |
+| GPU 历史按钮 | 打开 14.8 的 GPU 历史曲线(利用率折线 + 显存柱状,可切显卡与小时/天范围) |
+
+实现与权限:
+
+- 接口是 `gpu-metrics` 服务的 `GET /gpu-api/dashboard`(每 15 秒由页面轮询一次)。服务会拿**调用方自己的会话**去控制面 `/api/v2/users/me` 校验,未登录直接 401;不需要任何管理员令牌,也不放宽 Coder 自身的权限模型。
+- 前端页面为 `site/src/pages/DashboardPage/DashboardPage.tsx`,只渲染信息与「刷新」「GPU 历史」两个只读操作。
+
+### 14.10 工作区可见性与实例入口的权限边界
+
+| 事项 | 现状 |
+| --- | --- |
+| 谁能操作工作区(改配置、改 schedule、删除、重启) | 只有属主与管理员;其他人没有权限,API 层直接拒绝 |
+| 谁能进实例(Web 端 VS Code、网页终端、SSH) | **只有工作区属主**。路径型 app 被服务端强制成 `owner`,与模板写法无关;终端/pty 端点对非属主返回 404 |
+| 谁能看到别人的工作区 | Coder 自身的模型**不支持**"只读可见":工作区默认私有,共享只有 `use` 与 `admin` 两种角色,内置的 Organization Auditor 也不含工作区,自定义角色是企业功能(`custom_roles` 未授权)。因此只读可见性统一走 14.9 的 Dashboard,而不是放宽 Coder 的 ACL |
+| 谁能看性能指标 | GPU 历史对所有登录用户可见(14.8);Dashboard 上的 CPU/内存/磁盘是当前值快照 |
+
+注意:模板里 `coder_app` 的 `share` 已改回 `owner`;控制面也移除了 `--dangerous-allow-path-app-sharing` 与 `--dangerous-allow-cors-requests`,因此"路径型 app 只能属主访问"是服务端强制的,老模板建出来的工作区同样生效。
+
 ## 十五、附录
 
 ### 15.1 关键配置文件

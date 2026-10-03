@@ -24,8 +24,6 @@ ExecStart=__CODER_DIR__/build/coder_linux_amd64 \
     server \
     --http-address __HTTP_ADDR__ \
     --swagger-enable \
-    --dangerous-allow-cors-requests=true \
-    --dangerous-allow-path-app-sharing=true \
     --enable-terraform-debug-mode \
     --access-url __ACCESS_URL__ \
     --prometheus-enable \

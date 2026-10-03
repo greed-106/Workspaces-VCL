@@ -305,6 +305,7 @@ const ProvisionerJobsPage = lazy(
 		),
 );
 
+const DashboardPage = lazy(() => import("./pages/DashboardPage/DashboardPage"));
 const CoderCupPage = lazy(() => import("./pages/CoderCupPage/CoderCupPage"));
 
 const GlobalLayout = () => {
@@ -366,6 +367,8 @@ export const router = createBrowserRouter(
 			<Route element={<RequireAuth />}>
 				<Route element={<DashboardLayout />}>
 					<Route index element={<Navigate to="/workspaces" replace />} />
+
+					<Route path="/dashboard" element={<DashboardPage />} />
 
 					<Route
 						path="/external-auth/:provider"

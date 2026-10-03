@@ -159,6 +159,14 @@ const NavItems: React.FC<NavItemsProps> = ({ className }) => {
 	return (
 		<nav className={cn("flex items-center gap-4 h-full", className)}>
 			<NavLink
+				className={({ isActive }) =>
+					cn(linkStyles.default, { [linkStyles.active]: isActive })
+				}
+				to="/dashboard"
+			>
+				Dashboard
+			</NavLink>
+			<NavLink
 				className={({ isActive }) => {
 					if (location.pathname.startsWith("/@")) {
 						isActive = true;

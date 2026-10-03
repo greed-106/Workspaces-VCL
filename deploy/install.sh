@@ -85,6 +85,28 @@ install -m 0755 "$render_dir"/scripts/*.py /usr/local/sbin/
 install -m 0644 "$render_dir"/logrotate/* /etc/logrotate.d/
 systemctl daemon-reload
 
+# GPU 历史指标服务:需要时用本机 Go 工具链重新构建,数据库口令写进 0600 的环境文件。
+if [[ -n "${METRICS_PG_URL:-}" ]]; then
+  if [[ -f "$render_dir/systemd/gpu-metrics.service" ]]; then
+    go_bin="$(command -v go || true)"
+    for cand in /usr/local/go/bin/go /usr/lib/go/bin/go; do
+      [[ -z "$go_bin" && -x "$cand" ]] && go_bin="$cand"
+    done
+    if [[ -n "$go_bin" ]]; then
+      (cd "$repo_dir/deploy/gpu-metrics" && GOTOOLCHAIN=local "$go_bin" build -o /tmp/gpu-metrics-build .) \
+        && install -m 0755 /tmp/gpu-metrics-build /usr/local/bin/gpu-metrics && rm -f /tmp/gpu-metrics-build
+    fi
+    if [[ -x /usr/local/bin/gpu-metrics ]]; then
+      printf 'METRICS_PG_URL=%s\n' "$METRICS_PG_URL" > /etc/gpu-metrics.env
+      chmod 0600 /etc/gpu-metrics.env
+    else
+      echo "跳过 gpu-metrics 单元:找不到 Go 工具链,先手动构建:" >&2
+      echo "  cd $repo_dir/deploy/gpu-metrics && go build -o /usr/local/bin/gpu-metrics ." >&2
+      rm -f /etc/systemd/system/gpu-metrics.service
+    fi
+  fi
+fi
+
 # 反向代理:安装站点配置,并停用发行版自带的默认站点,避免抢占 80 端口。
 if command -v nginx >/dev/null 2>&1; then
   install -m 0644 "$render_dir"/nginx/*.conf /etc/nginx/conf.d/
@@ -99,6 +121,7 @@ cat <<EOF
   配额脚本     -> /usr/local/sbin/
   logrotate    -> /etc/logrotate.d/
   nginx 站点   -> /etc/nginx/conf.d/(发行版默认站点已停用)
+  GPU 指标服务 -> /usr/local/bin/gpu-metrics + /etc/gpu-metrics.env(0600)
 
 接下来:
   sudo systemctl enable --now coder-dev cluster-capacity

@@ -45,6 +45,60 @@ import * as TypesGen from "./typesGenerated";
  */
 export const SessionTokenCookie = "coder_session_token";
 
+/** 某个工作区里出现过的 GPU。index 是工作区内的序号(0 起),host_index 是宿主机上的编号。 */
+export type WorkspaceGpu = {
+	uuid: string;
+	index: number;
+	host_index: number;
+	mem_total_mib: number;
+	last_seen: string;
+};
+
+/** GPU 历史序列的一个采样点(util 为百分比,mem 单位为 MiB)。 */
+export type WorkspaceGpuPoint = {
+	t: string;
+	util_pct: number;
+	mem_used_mib: number;
+	mem_total_mib: number;
+	power_w: number;
+	temp_c: number;
+};
+
+/** Dashboard 里一行:一个正在运行的工作区及其配置与当前用量(只读)。 */
+export type DashboardGpu = {
+	index: number;
+	host_index: number;
+	util_pct: number;
+	mem_used_mib: number;
+	mem_total_mib: number;
+};
+
+export type DashboardInstance = {
+	workspace_id: string;
+	workspace_name: string;
+	username: string;
+	status: string;
+	started_at: string;
+	uptime_seconds: number;
+	cpu_limit: number;
+	memory_gib: number;
+	gpu_count: number;
+	disk_gib: number;
+	used_cpu_cores: number;
+	used_memory_gib: number;
+	disk_used_gib: number;
+	gpus: DashboardGpu[];
+};
+
+export type WorkspaceGpuSeries = {
+	workspace_id: string;
+	gpu: string;
+	hours: number;
+	bucket_minutes: number;
+	total_raw_points: number;
+	points: WorkspaceGpuPoint[];
+};
+
 /**
  * @param agentId
  * @returns {OneWayWebSocket} A OneWayWebSocket that emits Server-Sent Events.
@@ -1743,6 +1797,32 @@ class ApiMethods {
 		updatePassword: TypesGen.UpdateUserPasswordRequest,
 	): Promise<void> => {
 		await this.axios.put(`/api/v2/users/${userId}/password`, updatePassword);
+	};
+
+	// GPU 历史指标由本机 gpu-metrics 服务提供,经 nginx 以 /gpu-api/ 前缀暴露,
+	// 因此这里用相对路径,浏览器直接命中当前站点。
+	getWorkspaceGpus = async (workspaceId: string): Promise<WorkspaceGpu[]> => {
+		const response = await this.axios.get("/gpu-api/gpus", {
+			params: { workspace_id: workspaceId },
+		});
+		return response.data.gpus;
+	};
+
+	// 只读看板:列出所有正在运行的工作区。服务端会用调用方自己的会话向控制面校验身份。
+	getDashboard = async (): Promise<DashboardInstance[]> => {
+		const response = await this.axios.get("/gpu-api/dashboard");
+		return response.data.instances;
+	};
+
+	getWorkspaceGpuSeries = async (
+		workspaceId: string,
+		gpu: string,
+		hours: number,
+	): Promise<WorkspaceGpuSeries> => {
+		const response = await this.axios.get("/gpu-api/series", {
+			params: { workspace_id: workspaceId, gpu, hours },
+		});
+		return response.data;
 	};
 
 	validateUserPassword = async (

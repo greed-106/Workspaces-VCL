@@ -1,0 +1,22 @@
+[Unit]
+Description=GPU history metrics for Coder workspaces (DCGM exporter to PostgreSQL)
+Documentation=https://github.com/greed-106/Workspaces-VCL
+After=kubelet.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__CODER_USER__
+# 数据库口令放在 0600 的 EnvironmentFile 里,不写进单元文件。
+EnvironmentFile=/etc/gpu-metrics.env
+ExecStart=/usr/local/bin/gpu-metrics \
+    -addr __GPU_METRICS_ADDR__ \
+    -namespace __NAMESPACE__ \
+    -kubeconfig __KUBECONFIG__ \
+    -exporter-namespace gpu-operator \
+    -interval 1m
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -321,6 +321,24 @@ resource "coder_agent" "main" {
     interval     = 60
     timeout      = 1
   }
+
+  # GPU 指标:取该工作区可见的所有 GPU 的平均值(未分配 GPU 的工作区输出 n/a)。
+  # 数值保持为纯数字,Coder 会按时间画曲线;单位写在 display_name 里。
+  metadata {
+    display_name = "GPU Utilization (%)"
+    key          = "4_gpu_utilization"
+    script       = "command -v nvidia-smi >/dev/null 2>&1 || { echo n/a; exit 0; }; nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits | awk '{s+=$1;n++} END{if(n>0) printf \"%d\", s/n; else print \"n/a\"}'"
+    interval     = 10
+    timeout      = 3
+  }
+
+  metadata {
+    display_name = "GPU Memory (%)"
+    key          = "5_gpu_memory"
+    script       = "command -v nvidia-smi >/dev/null 2>&1 || { echo n/a; exit 0; }; nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits | awk -F', *' '{u+=$1;t+=$2;n++} END{if(t>0) printf \"%d\", u*100/t; else print \"n/a\"}'"
+    interval     = 10
+    timeout      = 3
+  }
 }
 
 # 申请前先把关:apply 一开始(几秒内)就检查集群是否真有这么多资源。
@@ -370,10 +388,9 @@ resource "coder_app" "code_server" {
   icon         = "/icon/code.svg"
   url          = "http://127.0.0.1:13337/"
   subdomain    = false
-  # 默认(不写 share)是 owner:只有工作区属主能打开,连管理员/owner 都会拿到 404,
-  # 于是出现"网页终端能进、网页 VS Code 进不去"的割裂。这里放开给所有已登录用户,
-  # 与终端、以及"成员可以互相建工作区"的现状一致。想收紧改回 "owner" 即可。
-  share        = "authenticated"
+  # share = owner:只有工作区属主能打开网页 VS Code;其他用户在工作区页面能看到
+  # 状态、配置与性能信息,但进不去实例(终端同理)。管理员也不会例外。
+  share        = "owner"
   open_in      = "slim-window"
 
   healthcheck {

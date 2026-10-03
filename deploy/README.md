@@ -846,7 +846,8 @@ df -h / /mnt/ssd-data /mnt/hdd-data                                # 7 根分区
 | 对外 | 后端 | 说明 |
 | --- | --- | --- |
 | `http://<域名>/`(80) | `127.0.0.1:3001` | 控制面:Web UI、API、工作区代理(Web 端 VS Code、终端、端口转发) |
-| `http://<域名>:3999/` | `127.0.0.1:3998` | 容量与数据卷服务:实时余量、卷管理、分片上传 |
+| `http://<域名>/capacity-api/` | `127.0.0.1:3998` | 容量与数据卷服务:实时余量、卷管理、分片上传(**页面走这条同源路径**) |
+| `http://<域名>:3999/` | `127.0.0.1:3998` | 同一服务的独立端口,保留给命令行/脚本直接调用 |
 
 选择宿主机二进制而不是容器的原因:入口代理依赖最少(不需要容器运行时即可启动),由 `systemd` 直接托管与随机器启动,升级走发行版包管理,日志与轮转沿用系统配置;容器方案多一层运行时依赖,对纯转发没有收益。
 
@@ -862,6 +863,8 @@ df -h / /mnt/ssd-data /mnt/hdd-data                                # 7 根分区
 | `proxy_read_timeout` / `proxy_send_timeout` / `send_timeout 3600s` | 长连接隧道不会被中途断开 |
 | `proxy_socket_keepalive on` 与 `upstream ... keepalive` | 与后端保持长连接,减少握手开销 |
 | `tcp_nodelay on` | 交互式终端与隧道的小包立即发送,降低延迟 |
+
+⚠️ 容量与数据卷服务**必须**通过 `/capacity-api/` 同源访问:控制面下发的 CSP 是 `connect-src 'self' …`,浏览器直接请求 `http://<域名>:3999` 会被 CSP 拦下并报 `TypeError: Failed to fetch`(请求根本不会发出)。前端已统一改用 `capacityUrl()`(`site/src/modules/clusterCapacity/clusterCapacity.ts`),新增这类跨服务调用时也要走同源路径。
 
 验收方式(部署后建议各做一次):
 

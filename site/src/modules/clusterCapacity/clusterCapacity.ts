@@ -10,7 +10,15 @@ import { useEffect, useState } from "react";
  * A single poller runs for the whole page; when the endpoint is unreachable the
  * capacity is reported as unavailable and callers fall back to static values.
  */
-export const CAPACITY_PORT = 3999;
+/**
+ * 容量与数据卷服务在本站点的同源入口(nginx 把 /capacity-api/ 转发到
+ * cluster-capacity 服务)。不要直接请求 http://<hostname>:3999:
+ * 控制面下发的 CSP 只允许 connect-src 'self',跨端口请求会被浏览器拦下。
+ */
+export const CAPACITY_BASE = "/capacity-api";
+
+export const capacityUrl = (path: string): string => `${CAPACITY_BASE}${path}`;
+
 const POLL_MS = 10000;
 
 export type ClusterCapacity = {
@@ -30,8 +38,7 @@ export type ClusterCapacityState = {
 	updatedAt: number | null;
 };
 
-const endpoint = () =>
-	`http://${window.location.hostname}:${CAPACITY_PORT}/capacity`;
+const endpoint = () => capacityUrl("/capacity");
 
 let state: ClusterCapacityState = {
 	data: null,

@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Button } from "#/components/Button/Button";
+import { capacityUrl } from "#/modules/clusterCapacity/clusterCapacity";
 
 /**
  * Uploads files into a volume root, chunk by chunk, so a dropped connection
@@ -10,7 +11,6 @@ import { Button } from "#/components/Button/Button";
  * are never resolved silently: the user picks overwrite, rename or cancel.
  */
 
-const PORT = 3999;
 const CHUNK_BYTES = 8 * 1024 * 1024;
 const MAX_ATTEMPTS = 3;
 
@@ -26,7 +26,7 @@ type Task = {
 };
 
 const endpoint = (pvc: string, path = "") =>
-	`http://${window.location.hostname}:${PORT}/volumes/${pvc}/uploads${path}`;
+	capacityUrl(`/volumes/${pvc}/uploads${path}`);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

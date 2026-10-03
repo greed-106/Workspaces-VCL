@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuthenticated } from "#/hooks/useAuthenticated";
+import { capacityUrl } from "./clusterCapacity";
 
 /**
  * HDD volume picker.
@@ -9,7 +10,6 @@ import { useAuthenticated } from "#/hooks/useAuthenticated";
  * field talks to the cluster-capacity service directly instead, and falls back
  * to the plain text input when the service is unreachable.
  */
-export const CAPACITY_PORT = 3999;
 
 type HddVolume = {
 	pvc: string;
@@ -40,7 +40,7 @@ export const HddVolumeField: React.FC<{
 
 	useEffect(() => {
 		let alive = true;
-		const endpoint = `http://${window.location.hostname}:${CAPACITY_PORT}/volumes`;
+		const endpoint = capacityUrl("/volumes");
 		const load = async () => {
 			try {
 				const res = await fetch(endpoint, { cache: "no-store" });

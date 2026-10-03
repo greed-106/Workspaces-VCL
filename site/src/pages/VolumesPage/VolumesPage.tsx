@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "#/components/Button/Button";
 import { useAuthenticated } from "#/hooks/useAuthenticated";
+import { capacityUrl } from "#/modules/clusterCapacity/clusterCapacity";
 import { VolumeUpload } from "./VolumeUpload";
 
 /**
@@ -12,7 +13,6 @@ import { VolumeUpload } from "./VolumeUpload";
  * unrestricted.
  */
 
-const PORT = 3999;
 const MIN_GB = 100;
 const MAX_GB = 1000;
 const BUDGET_GB = 1000;
@@ -29,8 +29,7 @@ type Volume = {
 	in_use_by?: string[];
 };
 
-const endpoint = (path = "") =>
-	`http://${window.location.hostname}:${PORT}/volumes${path}`;
+const endpoint = (path = "") => capacityUrl(`/volumes${path}`);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -79,10 +78,7 @@ const HddCapacity: React.FC = () => {
 	useEffect(() => {
 		const load = async () => {
 			try {
-				const res = await fetch(
-					`http://${window.location.hostname}:${PORT}/hdd`,
-					{ cache: "no-store" },
-				);
+				const res = await fetch(capacityUrl("/hdd"), { cache: "no-store" });
 				setInfo((await res.json()) as HddInfo);
 			} catch {
 				setInfo(null);
